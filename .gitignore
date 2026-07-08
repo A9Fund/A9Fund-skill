@@ -1,0 +1,9 @@
+# Per-skill runtime state (written by config.py bind; not part of the skill)
+state.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
