@@ -5,9 +5,17 @@ entry), a standalone conditional order rests in its own queue until its trigger
 fires, then submits a LIMIT/MARKET order. After it triggers, the resulting
 regular order is linked via `triggered_order_id`.
 
+Two easily-confused views (different endpoints):
+  * conditional_order.py list  -> GET /conditional-orders  = ACTIVE standalone
+    conditional orders only (UNTRIGGERED).
+  * query.py condition-orders  -> GET /conditionOrders      = MIXED view incl.
+    history (TRIGGERED / CANCELED) and attached TP/SL legs.
+  Use `list` (or `history`) here for the standalone-conditional lifecycle;
+  use `query.py condition-orders` for the full/historical picture.
+
 Subcommands:
   create   POST   /conditional-orders
-  list     GET    /conditional-orders           [--symbol]
+  list     GET    /conditional-orders           [--symbol]   (active / UNTRIGGERED)
   history  GET    /conditional-orders/history   [--symbol] [--page] [--limit]
   cancel   DELETE /conditional-orders/{id}
 
@@ -81,6 +89,8 @@ def cmd_cancel(args, cfg):
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Standalone conditional (trigger) orders")
+    p.add_argument("--account-id", default=None,
+                   help="Assert the bound account before acting (guards state drift; also A9FUND_ACCOUNT_ID).")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sc = sub.add_parser("create")
@@ -109,7 +119,7 @@ def main() -> None:
     scx = sub.add_parser("cancel"); scx.add_argument("--id", required=True); scx.set_defaults(func=cmd_cancel)
 
     args = p.parse_args()
-    cfg = load_config()
+    cfg = load_config(expected_account_id=args.account_id)
     args.func(args, cfg)
 
 

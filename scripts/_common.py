@@ -166,8 +166,16 @@ def save_credentials(account_id: str, creds: dict[str, Any]) -> None:
 # Merged config (what business scripts see)
 # ---------------------------------------------------------------------------
 
-def load_config() -> dict[str, Any]:
-    """Return the merged config: credentials + state for the active account."""
+def load_config(expected_account_id: str | None = None) -> dict[str, Any]:
+    """Return the merged config: credentials + state for the active account.
+
+    Anti-drift guard: if `expected_account_id` (or the A9FUND_ACCOUNT_ID env
+    var) is set and does NOT match the currently-bound `active_account_id`,
+    refuse instead of silently operating the wrong account. `state.json`'s
+    `active_account_id` is only ever written by `config.py bind`, so a mismatch
+    means a stray / concurrent re-bind drifted the binding — trading against it
+    would hit a different (possibly disabled) account and 403.
+    """
     state = load_state()
     active_id = state.get("active_account_id")
     if not active_id:
@@ -178,6 +186,17 @@ def load_config() -> dict[str, Any]:
             f"Ask the user for their account id and run:\n"
             f"  python3 scripts/config.py bind --account-id <id>\n"
             f"First-time setup: A9Fund account detail page (/app/agent-api).{hint}"
+        )
+
+    expected = expected_account_id or os.environ.get("A9FUND_ACCOUNT_ID")
+    if expected and str(expected) != str(active_id):
+        die(
+            f"Account guard tripped: skill is bound to {active_id}, but "
+            f"{expected} was expected.\n"
+            f"The binding may have drifted (a stray `config.py bind`, or a "
+            f"parallel test). Re-bind the intended account before continuing:\n"
+            f"  python3 scripts/config.py bind --account-id {expected}\n"
+            f"(guard source: --account-id flag or A9FUND_ACCOUNT_ID env var)"
         )
 
     creds = load_credentials(active_id)
@@ -302,6 +321,10 @@ def get_active_exchange(cfg: dict[str, Any] | None = None, *, refresh: bool = Fa
             return cached
     active = fetch_active_exchange(cfg=cfg)
     if active:
+        # Re-read immediately before writing and update ONLY active_exchange,
+        # so a concurrent `config.py bind` (which rewrites active_account_id)
+        # is never clobbered by this cache refresh.
+        state = load_state()
         state["active_exchange"] = active
         save_state(state)
     return active

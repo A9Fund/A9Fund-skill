@@ -4,7 +4,10 @@ Subcommands:
   positions         [--symbol]
   balance                                # GET /portfolio/balances
   open-orders       [--symbol]           # GET /openOrders  (regular LIMIT/MARKET)
-  condition-orders  [--symbol]           # GET /conditionOrders (TP/SL + trigger orders)
+  condition-orders  [--symbol]           # GET /conditionOrders -- MIXED view of TP/SL +
+                                         #   trigger orders INCLUDING history (TRIGGERED/
+                                         #   CANCELED). For the ACTIVE-only standalone list
+                                         #   use: conditional_order.py list (GET /conditional-orders).
   history-orders    [--symbol] [--page] [--limit]
   trades            [--symbol] [--page] [--limit]
   pnl-closed        [--symbol] [--start <unix-microsec>] [--end <unix-microsec>] [--page] [--limit]
@@ -67,6 +70,8 @@ def cmd_accounts(_args, cfg):
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Query endpoints")
+    p.add_argument("--account-id", default=None,
+                   help="Assert the bound account before querying (guards state drift; also A9FUND_ACCOUNT_ID).")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("positions"); sp.add_argument("--symbol"); sp.set_defaults(func=cmd_positions)
@@ -93,7 +98,7 @@ def main() -> None:
     sub.add_parser("accounts").set_defaults(func=cmd_accounts)
 
     args = p.parse_args()
-    cfg = load_config()
+    cfg = load_config(expected_account_id=args.account_id)
     args.func(args, cfg)
 
 

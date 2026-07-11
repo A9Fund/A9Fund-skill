@@ -46,6 +46,9 @@ def main() -> None:
     p.add_argument("--reasoning", default="",
                    help="OPTIONAL rationale for this order (max 4096 bytes UTF-8). "
                         "Not required by A9Fund; attached only if provided.")
+    p.add_argument("--account-id", default=None,
+                   help="Assert the skill is bound to this account before sending "
+                        "the order (guards against state drift; also A9FUND_ACCOUNT_ID).")
     args = p.parse_args()
 
     if args.order_type == "LIMIT" and not args.price:
@@ -55,7 +58,7 @@ def main() -> None:
     if reasoning_text and len(reasoning_text.encode("utf-8")) > REASONING_MAX_BYTES:
         die(f"--reasoning is over {REASONING_MAX_BYTES} bytes (UTF-8). Shorten it and retry.")
 
-    cfg = load_config()
+    cfg = load_config(expected_account_id=args.account_id)
     cid = args.client_order_id or f"agent-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
 
     tp_on, sl_on = bool(args.tp_price), bool(args.sl_price)

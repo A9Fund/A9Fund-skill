@@ -76,6 +76,13 @@ After the summary, act on the user's strategy without confirming each order.
 Before any risk-sensitive action, re-run `risk_status.py` and note how close each
 threshold is.
 
+**Guard against binding drift.** `state.json`'s `active_account_id` is only
+changed by `config.py bind`, but if you juggle multiple accounts (or run
+parallel tests) a stray re-bind can point the skill at the wrong / a disabled
+account — every call then 403s. Pin the intended account so scripts refuse to act
+on a mismatch: pass `--account-id <id>` to any trading/query script, or export
+`A9FUND_ACCOUNT_ID=<id>` once for the session.
+
 ## Command cheatsheet
 
 See `scripts/README.md` for the full list. Common ones:

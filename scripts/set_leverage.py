@@ -25,9 +25,11 @@ def main() -> None:
     p.add_argument("--symbol", required=True)
     p.add_argument("--leverage", type=int, required=True)
     p.add_argument("--margin-mode", default="CROSS", choices=["CROSS", "ISOLATED"])
+    p.add_argument("--account-id", default=None,
+                   help="Assert the bound account before changing leverage (guards state drift; also A9FUND_ACCOUNT_ID).")
     args = p.parse_args()
 
-    cfg = load_config()
+    cfg = load_config(expected_account_id=args.account_id)
     phase = str(cfg.get("phase", "")).lower()
     if phase == "fund":
         max_lev, stage = FUND_MAX_LEVERAGE, "Fund"

@@ -87,6 +87,27 @@ Legacy (key passes through the agent): `python3 config.py bootstrap --api-key af
 `/market/metadata`. Event-contract endpoints scope by `account_id` (not
 `exchange_account_id`); `api.py --inject-account --account-key account_id` injects it.
 
+## Account guard (anti-drift)
+
+`state.json`'s `active_account_id` is only written by `config.py bind`. If it
+drifts (a stray re-bind, or parallel tests), every script would silently operate
+the wrong account and 403. Pin the expected account:
+
+- Per command: `--account-id <id>` on `place_order` / `close_position` /
+  `cancel_order` / `set_leverage` / `conditional_order` / `query`.
+- Whole session: `export A9FUND_ACCOUNT_ID=<id>`.
+
+A mismatch aborts with a clear message instead of trading the wrong account.
+
+## Cancel by id / the two condition-order views
+
+- `cancel_order.py --order-id` takes the A9Fund **`order_id`** (from the create
+  response or `query.py open-orders`), NOT the venue `exchange_order_id` (usually
+  empty on the paper venue).
+- `conditional_order.py list` = **active** standalone conditional orders
+  (`/conditional-orders`, UNTRIGGERED). `query.py condition-orders` = **mixed**
+  view incl. history (`/conditionOrders`, TRIGGERED/CANCELED + TP/SL legs).
+
 ## Failure fallback
 
 1. Generic caller: `python3 api.py <METHOD> <PATH>`.

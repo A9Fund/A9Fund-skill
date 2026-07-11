@@ -127,6 +127,11 @@ curl -X POST $BASE/cancelOrder \
   -d '{"exchange_account_id":"'$ACCT'","exchange_order_id":"1234567890","symbol":"BTC-USDT","trace_id":"cancel-001"}'
 ```
 
+> ⚠️ Despite the field name, put the A9Fund **`order_id`** (from the create
+> response or `/openOrders`) into `exchange_order_id`. On the paper venue the
+> real `exchange_order_id` is usually `""`, so `order_id` is the id you cancel by.
+> (`cancel_order.py --order-id` takes that `order_id`.)
+
 ### POST /cancelOrders — batch by symbol
 
 ```bash
@@ -175,6 +180,14 @@ curl -X DELETE "$BASE/conditional-orders/<id>?exchange_account_id=$ACCT" -H "Aut
 - After a conditional order triggers, the resulting regular order is linked via
   `triggered_order_id`.
 
+> **Two similarly-named views — don't confuse them:**
+> - `GET /conditional-orders` (dashed) = **active** standalone conditional
+>   orders only (UNTRIGGERED). `/conditional-orders/history` for the rest.
+>   Driven by `conditional_order.py list` / `history`.
+> - `GET /conditionOrders` (camelCase) = **mixed** view: TP/SL legs + trigger
+>   orders **including** history (TRIGGERED / CANCELED). Driven by
+>   `query.py condition-orders`.
+
 ---
 
 ## Queries (Private)
@@ -183,7 +196,7 @@ curl -X DELETE "$BASE/conditional-orders/<id>?exchange_account_id=$ACCT" -H "Aut
 curl "$BASE/positions?exchange_account_id=$ACCT&symbol=BTC-USDT" -H "Authorization: Bearer $KEY"
 curl "$BASE/portfolio/balances?exchange_account_id=$ACCT" -H "Authorization: Bearer $KEY"
 curl "$BASE/openOrders?exchange_account_id=$ACCT" -H "Authorization: Bearer $KEY"     # regular orders; entry rows embed take_profit[]/stop_loss[]
-curl "$BASE/conditionOrders?exchange_account_id=$ACCT" -H "Authorization: Bearer $KEY" # TP/SL + trigger orders
+curl "$BASE/conditionOrders?exchange_account_id=$ACCT" -H "Authorization: Bearer $KEY" # MIXED: TP/SL + trigger orders incl. history
 curl "$BASE/historyOrders?exchange_account_id=$ACCT&page=1&limit=20" -H "Authorization: Bearer $KEY"
 curl "$BASE/trades?exchange_account_id=$ACCT&page=1&limit=20" -H "Authorization: Bearer $KEY"
 curl "$BASE/pnl/closed?exchange_account_id=$ACCT" -H "Authorization: Bearer $KEY"

@@ -62,13 +62,15 @@ def main() -> None:
     g.add_argument("--symbol", help="Close the position for this symbol")
     g.add_argument("--all", action="store_true", help="Close every open position")
     p.add_argument("--reasoning", default="", help="OPTIONAL rationale (max 4096 bytes UTF-8).")
+    p.add_argument("--account-id", default=None,
+                   help="Assert the bound account before closing (guards state drift; also A9FUND_ACCOUNT_ID).")
     args = p.parse_args()
 
     reasoning_text = (args.reasoning or "").strip()
     if reasoning_text and len(reasoning_text.encode("utf-8")) > 4096:
         die("--reasoning exceeds 4096 bytes (UTF-8). Shorten it and retry.")
 
-    cfg = load_config()
+    cfg = load_config(expected_account_id=args.account_id)
     positions = fetch_positions(cfg, None if args.all else args.symbol)
     if not positions:
         die("No open position to close." if args.symbol else "No open positions.")
