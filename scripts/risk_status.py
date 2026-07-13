@@ -38,13 +38,16 @@ RULE_REMINDERS = [
     "in real time -- one breach fails the account. Standard also has a 5% alert line.",
     "Leverage caps: challenge phase 10X, fund phase 5X (propdesk enforces at order time).",
     "Rate limit: max 5 orders per second per account.",
-    "Profitable days: need >= 2 (Starter) / 3 (Standard, Fast) profitable trading days to pass or to be payout-eligible.",
+    "Profitable days (UTC day with positive REALIZED pnl): Starter 2 / Fast 3 / Standard 3 per phase. "
+    "Only realized profit counts toward the pass target -- floating PnL does not; "
+    "current_pnl_pct here is equity-based (includes floating), don't read it as pass progress.",
     "Event contracts: odds 0.2-0.8, stake 0.5-2% of equity, max 3 open, max 1 per symbol; "
     "profit counts toward passing only after 6 settled; any open/disputed contract blocks pass and payout.",
     "Inactivity: account goes inactive after 30 calendar days with no real fill. "
     "Only an executed trade resets the clock (logins, market-data reads, unfilled/cancelled orders do NOT).",
     "Consistency: a single day's profit may not exceed 45%/40%/35% (Starter/Standard/Fast) "
-    "of total profit -- checked at payout, not at trade time.",
+    "of total profit (Standard: of the current phase's profit) -- blocks pass/payout when unmet, "
+    "checked at pass/payout, not at trade time.",
     "Payout: first eligible 14 days after fund activation, then every 14 days; needs KYC done, "
     "no open positions, no unsettled event contracts; single-cycle cap ~5% of account size (first cycle up to 3%).",
     "Forbidden: multi-account trading/hedging, quote-latency/mispricing exploits, "
@@ -118,6 +121,12 @@ def main() -> None:
     open_pos_count = len(positions or [])
 
     pnl_pct = ((total_equity - initial_balance) / initial_balance * 100) if initial_balance else 0
+    # Pass-target basis: only REALIZED profit counts (published rules §06).
+    # wallet_balance is the realized portion (initial + realized − fees + funding).
+    realized_pct = (
+        (wallet_balance - initial_balance) / initial_balance * 100
+        if initial_balance and wallet_balance is not None else None
+    )
 
     # Prefer propdesk's authoritative figures from the account risk sub-object.
     # The account reports its OWN red lines (max_drawdown_pct etc.), which are
@@ -165,6 +174,9 @@ def main() -> None:
         "unrealized_pnl": unrealized_pnl,
         "realized_pnl": realized_pnl,
         "current_pnl_pct": round(pnl_pct, 2),
+        # Compare THIS against the profit target -- only realized profit counts
+        # toward passing; current_pnl_pct includes floating PnL and does not.
+        "realized_pnl_pct": (round(realized_pct, 2) if realized_pct is not None else None),
         "profit_target_pct": th.get("profit_target_pct"),
         "leverage_cap": 5 if phase == "fund" else 10,
         "thresholds": {

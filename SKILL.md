@@ -172,10 +172,15 @@ Summary — **propdesk enforces these in real time; one breach is terminal**:
 - **Leverage caps:** challenge phase **10X**, fund phase **5X**. Single scalar —
   ignore any per-asset numbers shown in the UI; trust what propdesk accepts.
 - **Rate limit:** max **5 orders/sec** per account (sleep ≥ 250 ms when batching).
-- **Profitable days to pass / payout:** Starter **2**, Standard **3**, Fast **3**.
+- **Profitable days to pass / payout:** Starter **2**, Fast **3**, Standard
+  **3 per phase**. A profitable day = a UTC calendar day with positive
+  **realized** PnL.
 - **Profit targets:** Starter 8%, Standard 8% → 5% (two-phase), Fast 10%.
+  **Only realized profit counts toward the target** — floating PnL doesn't;
+  realize gains before treating the target as met.
 - **Consistency:** a single day's profit ≤ 45% / 40% / 35% (Starter / Standard /
-  Fast) of total profit — checked at payout.
+  Fast) of total profit (Standard: of the current **phase's** profit) — unmet
+  consistency blocks pass/payout (temporary blocker, not a fail).
 - **Event contracts:** symbols {BTCUSDT, ETHUSDT}, direction {UP, DOWN}, duration
   {10m, 30m, 1h, 1d}, **odds 0.2–0.8**, **stake 0.5–2% of equity** (min 10 USDT),
   **max 3 open**, **max 1 per symbol**, fixed **80%** payout. Profit counts toward

@@ -57,10 +57,16 @@ account cannot trade, request payout, or pass.
 
 ## Consistency (single-day profit cap)
 
-Single-day profit may not exceed **45% (Starter) / 40% (Standard) / 35% (Fast)**
-of total profit. Published to propdesk and **enforced at payout** (a payout
-`best_day` gate), not at trade time. Practically: don't let one lucky day carry
-the whole account, or the payout gate blocks the request.
+Single-day profit may not exceed **45% (Starter) / 40% (Standard, measured
+against the current phase's total profit) / 35% (Fast)** of total profit.
+Checked at **pass and payout** (not at trade time); unmet consistency is a
+**temporary blocker** — keep trading until the profit distribution satisfies the
+rule, the account does not fail. Practically: don't let one lucky day carry the
+whole account, or the pass/payout gate blocks the request.
+
+Related pass-basis rule: **only realized profit counts toward the pass target**
+(a profitable day = UTC calendar day with positive realized PnL; floating PnL
+never counts). Use `risk_status.py`'s `realized_pnl_pct` for pass progress.
 
 ## Reasoning (NOT required)
 

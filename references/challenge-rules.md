@@ -16,21 +16,22 @@ actually fails an account.
 
 ## Account paths and tiers
 
-Three paths (published rules qa.a9fund.com/rules, Updated 2026-06-24):
+Three paths, six SKUs (published rules qa.a9fund.com/rules, Updated 2026-06-24,
+re-checked 2026-07-13):
 
 | SKU | Path | Size | Price | Stage(s) | Profit target | Min profitable days | Profit split |
 |---|---|---|---|---|---|---|---|
 | `starter_5k`    | Starter  | $5,000   | $49  | 1-stage (funded on purchase) | 8%      | 2 | 70% |
 | `starter_10k`   | Starter  | $10,000  | $99  | 1-stage                      | 8%      | 2 | 70% |
-| `standard_25k`  | Standard | $25,000  | $199 | 2-stage (8% → 5%)            | 8% → 5% | 3 | 80% (90% when healthy) |
-| `standard_50k`  | Standard | $50,000  | $349 | 2-stage (8% → 5%)            | 8% → 5% | 3 | 80% (90% when healthy) |
-| `standard_100k` | Standard | $100,000 | $649 | 2-stage (8% → 5%)            | 8% → 5% | 3 | 80% (90% when healthy) |
+| `standard_25k`  | Standard | $25,000  | $199 | 2-stage (8% → 5%)            | 8% → 5% | 3 **per phase** | 80% (90% when healthy) |
+| `standard_50k`  | Standard | $50,000  | $349 | 2-stage (8% → 5%)            | 8% → 5% | 3 **per phase** | 80% (90% when healthy) |
 | `fast_10k`      | Fast     | $10,000  | $149 | 1-stage                      | 10%     | 3 | 80% |
 | `fast_25k`      | Fast     | $25,000  | $299 | 1-stage                      | 10%     | 3 | 80% |
-| `fast_50k`      | Fast     | $50,000  | $499 | 1-stage                      | 10%     | 3 | 80% |
 
-- Standard $50K is the default recommended plan. Plans **≥ $100 include the A9 AI
-  Assistant** (in-platform advisory chat); plans < $100 do not.
+- Standard $50K is the default recommended plan.
+- Pricing model: one-time challenge fee + funded-account profit split. No
+  subscription fee, no extra charge for prediction markets or the AI Assistant;
+  **A9 Alpha currently shows a limited-time $100 free AI-assistant credit.**
 - Global constants: single-user total account-value quota **$200,000**;
   challenge-stage max leverage **10X**, fund-stage **5X**.
 
@@ -40,11 +41,10 @@ Three paths (published rules qa.a9fund.com/rules, Updated 2026-06-24):
 > signature + capital; set it manually with `--skip-lookup --mode <...>` if
 > neither resolves it (e.g. the $10k Starter-vs-Fast overlap).
 
-> ⚠️ **Code vs published rules:** the authoritative backend snapshot
-> (`rules-authoritative.md`, 2026-07-06) had only the 6 smaller SKUs and marked
-> prices as placeholders; the public rules page (2026-06-24) lists all 8 above
-> with these prices. Thresholds are per-*track* (not per-tier), so the skill's
-> risk logic works for every tier regardless.
+> ℹ️ The rules page briefly listed Standard $100K ($649) and Fast $50K ($499);
+> as of 2026-07-13 those tiers are gone again and the page matches the backend
+> catalog's 6 SKUs. `bind`'s fallback inference still tolerates those tiers if
+> an account is ever issued at them (thresholds are per-*track*, not per-tier).
 
 ## Markets
 
@@ -52,6 +52,18 @@ Three paths (published rules qa.a9fund.com/rules, Updated 2026-06-24):
   leverage only; no per-pair leverage).
 - **Prediction / event contracts:** BTCUSDT, ETHUSDT (see
   `event-contracts.md`).
+- **Not supported:** political / sports / war / entertainment prediction
+  markets, low-liquidity new coins, or any market where slippage / order-book
+  depth can't be computed reliably.
+
+## A9 AI Assistant vs. this skill
+
+The **A9 AI Assistant** is the platform's built-in advisory chat: it explains
+markets, rules, and risk state, but **does not create bots, submit trade
+intents, or place orders**, and cannot bypass KYC, blockers, or risk limits.
+This skill is a different thing — it drives the **account-level Agent API**
+(the platform's sanctioned programmatic trading path, `/app/agent-api`). Don't
+conflate the two when reading the rules page.
 
 ## Stage model
 
@@ -66,10 +78,21 @@ are funded from purchase, their cap is **5X**.
 
 ## Pass / fail
 
+Passing requires **all of these at the same time** (published §06): profit
+target reached, enough profitable days, consistency satisfied, no violation
+failure, and no active temporary blocker.
+
+- **Only REALIZED profit counts toward the pass target.** Floating/unrealized
+  PnL does not count — an account sitting on a big open winner has NOT passed
+  until it realizes the gain. (`risk_status.py`'s `current_pnl_pct` is
+  equity-based and includes floating PnL; don't read it as pass progress.)
+- **Profitable day** = a UTC calendar day whose **realized** PnL is positive.
+- **Consistency:** max single-day profit ≤ **45%** (Starter) / **40%**
+  (Standard, measured against the **current phase's** total profit) / **35%**
+  (Fast) of total profit. Unmet consistency is a temporary blocker, not a fail.
+- **Unsettled prediction-market profit** does not count toward the target.
 - **Pass (Standard):** the backend trusts propdesk's `final_challenge_pass=True`
   — it does not compute Standard's multi-phase completion itself.
-- **Pass (Starter / Fast):** `current profit% ≥ target% AND profitable days ≥
-  min days`.
 - **Standard pass upgrade** is blocked while the account has any unsettled /
   disputed / unreconciled event contract — settle those first.
 - **Fail:** cumulative drawdown reaching the red line (`cumulative loss% ≥
@@ -79,8 +102,13 @@ are funded from purchase, their cap is **5X**.
 
 ## Minimum profitable days
 
-Starter = **2**, Standard = **3**, Fast = **3**. Scope is cumulative (`total`),
-not per-phase. A day counts per propdesk's effective-trading-day logic.
+Starter = **2**, Fast = **3**, Standard = **3 per phase** (published §03
+"固定 每阶段 3"). A profitable day is a UTC calendar day with positive realized
+PnL.
+
+> ⚠️ **Code vs published:** the backend snapshot counted Standard's days with
+> scope `total` (3 cumulative, not per-phase). The published page says per
+> phase — plan for per-phase (the stricter reading) until the backend confirms.
 
 ## Inactivity / termination
 
