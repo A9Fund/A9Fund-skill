@@ -49,9 +49,14 @@ re-checked 2026-07-13):
 ## Markets
 
 - **Crypto trading:** initial pairs **BTCUSDT, ETHUSDT, SOLUSDT** (account-level
-  leverage only; no per-pair leverage).
+  leverage only; no per-pair leverage). Accounts are **Binance-referenced
+  simulation** (real market data, no real exchange orders — `account_type:
+  "paper"` in API responses). FAQ lists BNB/XRP/DOGE/LINK/AVAX/ADA/SUI as later
+  *candidates*, not commitments — trust `markets.py metadata` for what's
+  tradeable now.
 - **Prediction / event contracts:** BTCUSDT, ETHUSDT (see
-  `event-contracts.md`).
+  `event-contracts.md`). A trading position and a prediction on the same crypto
+  must not coexist.
 - **Not supported:** political / sports / war / entertainment prediction
   markets, low-liquidity new coins, or any market where slippage / order-book
   depth can't be computed reliably.
@@ -156,7 +161,8 @@ See `references/risk-rules.md` §Payout for the full detail. Summary:
   - **Single-cycle cap: ~5% of account size** (first cycle up to **3%**).
   - Must satisfy **all** of: **KYC completed**; not in daily/max-loss breach; **no
     open crypto positions**; **no unsettled/disputed** event contracts; account
-    not under review; request ≥ minimum and ≤ the cycle cap.
+    not under abnormal review (incl. **AI-abuse review**); request ≥ minimum and
+    ≤ the cycle cap.
 - **Wallet withdrawal** (platform balance → chain): minimum **$100** for
   everyone, **1%** fee, withdrawal days **8 / 18 / 28**, networks **ARB / POL /
   BSC**, coins **USDT / USDC**. Mainnet withdrawal is not yet live (testnet

@@ -185,7 +185,9 @@ Summary — **propdesk enforces these in real time; one breach is terminal**:
   {10m, 30m, 1h, 1d}, **odds 0.2–0.8**, **stake 0.5–2% of equity** (min 10 USDT),
   **max 3 open**, **max 1 per symbol**, fixed **80%** payout. Profit counts toward
   passing only after **6 settled**; any open/disputed contract blocks pass and
-  payout. See `references/event-contracts.md`.
+  payout. **Same-asset exclusivity:** a trading position and a prediction on the
+  same crypto must not coexist — check positions before buying a prediction and
+  vice versa. See `references/event-contracts.md`.
 - **Inactivity:** account goes inactive after **30 days** with no real fill —
   only an executed trade resets the clock.
 - **Forbidden:** multi-account trading/hedging, quote-latency/mispricing

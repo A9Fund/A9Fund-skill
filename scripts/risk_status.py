@@ -42,7 +42,9 @@ RULE_REMINDERS = [
     "Only realized profit counts toward the pass target -- floating PnL does not; "
     "current_pnl_pct here is equity-based (includes floating), don't read it as pass progress.",
     "Event contracts: odds 0.2-0.8, stake 0.5-2% of equity, max 3 open, max 1 per symbol; "
-    "profit counts toward passing only after 6 settled; any open/disputed contract blocks pass and payout.",
+    "profit counts toward passing only after 6 settled; any open/disputed contract blocks pass and payout. "
+    "Same-asset exclusivity: a trading position and a prediction on the same crypto must NOT coexist "
+    "-- check positions before buying a prediction (and vice versa).",
     "Inactivity: account goes inactive after 30 calendar days with no real fill. "
     "Only an executed trade resets the clock (logins, market-data reads, unfilled/cancelled orders do NOT).",
     "Consistency: a single day's profit may not exceed 45%/40%/35% (Starter/Standard/Fast) "

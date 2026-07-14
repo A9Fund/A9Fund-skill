@@ -73,8 +73,22 @@ never counts). Use `risk_status.py`'s `realized_pnl_pct` for pass progress.
 A9Fund's account-level API does **not** require a per-order reasoning string
 ("API 订单不需要提交额外推理说明"). `place_order.py` / `close_position.py` accept an
 optional `--reasoning` and only length-check it (≤ 4096 bytes UTF-8); they never
-block on it. If a specific agent-graded program samples reasoning, still write
-substantive, order-specific rationale — but the skill will not force it.
+block on it.
+
+## Retired rules — do NOT re-import from the aixfunded reference
+
+Officially confirmed retired (FAQ "风控、Breach 与 Blocker": "都不再作为 A9Fund
+fail 或 blocker"):
+
+- **Minimum 1-minute holding time**, incl. the min-holding alert/breach
+  counters (`short_hold_count_7d` may still appear in risk payloads — ignore it
+  as a rule).
+- **AI reasoning score** / platform AI quality score (this is why `--reasoning`
+  is optional above).
+- **Separate manual vs. agent pass standards** (no manual/agent boundary rule).
+
+The aixfunded reference skill enforces all three; they do not apply on A9Fund.
+Don't "fix" the skill by re-adding them.
 
 ## Payout
 
