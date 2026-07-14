@@ -158,8 +158,8 @@ cleanup needed.
 
 A9Fund's account-level API does **not** require a per-order reasoning string.
 `place_order.py` / `close_position.py` accept an optional `--reasoning` (length-
-checked ≤ 4096 bytes UTF-8) but never block on it. Include one if a specific
-agent-graded program asks for it; otherwise omit.
+checked ≤ 4096 bytes UTF-8) but never block on it — useful only as your own
+audit trail.
 
 ## Critical rules (agent must internalize)
 

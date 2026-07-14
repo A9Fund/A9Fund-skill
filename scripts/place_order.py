@@ -12,9 +12,8 @@ Standalone STOP / TAKE_PROFIT trigger orders use the dedicated
 `/conditional-orders` resource -- see conditional_order.py, NOT this script.
 
 Reasoning: OPTIONAL on A9Fund. The account-level API does not require a
-per-order rationale ("API 订单不需要提交额外推理说明"). Pass --reasoning to
-attach one anyway (some agent-graded programs still sample it); it is only
-validated for length, never required. Max 4096 bytes UTF-8.
+per-order rationale. Pass --reasoning to attach one as your own audit trail;
+it is only validated for length (max 4096 bytes UTF-8), never required.
 """
 from __future__ import annotations
 
