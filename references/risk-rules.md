@@ -1,24 +1,28 @@
 # Risk and violation rules (A9Fund)
 
-> Sources: live API (always wins when available — this pass could NOT
-> live-verify, test key expired with `401 invalid or expired token`); published
-> rules page i18n source (`marketingRules` in `messages/{locale}.json`,
+> Sources: live API (always wins when available — re-verified 2026-07-15 on a
+> fresh Standard $50k Challenge account after the prior key expired); published
+> rules page i18n source (`marketingRules` in `messages/{locale}.json`, also
 > re-checked 2026-07-15); backend code snapshot (`docs/rules-authoritative.md`,
 > `RULES_VERSION = "2026-06-21.v1"`). Real-time risk is enforced by
 > **propdesk**; the backend publishes parameters, records terminal results, and
 > reconciles. See `challenge-rules.md` for the catalog/pricing side of the same
 > re-check, including a caveat that these tables have changed more than once.
+> **The live re-check found the published rules page is itself wrong on one
+> number** (Standard's daily loss line) — see the table below.
 
 ## Drawdown red lines (per track)
 
-Per the published rules page (§07, re-checked 2026-07-15 — **note this changed
-from the previously-documented numbers**, see caveat below):
+Per **live API data** (confirmed 2026-07-15 on a Standard $50k Challenge
+account, via two independent fields — `/exchange-accounts` risk object AND
+`/event-contracts/context` risk sub-object agree) — this overrides the
+published rules page for Standard's daily loss line, see caveat below:
 
 | | Starter | Standard | Fast |
 |---|---|---|---|
-| Daily max loss      | 4% | 5% | 4% |
-| Cumulative max loss | 8% (static) | 8% (static) | 6% (static) |
-| Alert line          | not published | not published (may still exist live) | not published |
+| Daily max loss      | 4% (unverified live — no Starter test account) | **4% (live-confirmed)** | 4% (unverified live — no Fast test account) |
+| Cumulative max loss | 8% (unverified live) | **8% (live-confirmed)** | 6% (unverified live) |
+| Alert line          | not published | 5% (live-confirmed field `alert_drawdown_pct`) | not published |
 
 **Enforcement:**
 - **Cumulative drawdown** → propdesk real-time (`DRAWDOWN_BREACH`); backend
@@ -36,13 +40,23 @@ from the previously-documented numbers**, see caveat below):
 A drawdown breach is terminal — one hit and the account is done. There is no
 human waiver.
 
-> ⚠️ **Changed since the last check (2026-07-13 → 2026-07-15):** previously
-> documented as Starter 3%/6%, Standard 4%/8%+5% alert, Fast 3%/6% (this matched
-> a live API read on a Standard account back on 2026-07-06: daily 4%, max 8%,
-> alert 5% — consistent with the *old* table, not the new one). The daily-loss
-> lines and Starter's max-loss line have since moved on the published page.
-> **Re-verify against a live account before trading close to any of these
-> lines** — this file could not be re-verified live this pass.
+> ⚠️ **Published-page bug found and corrected via live data (2026-07-15).**
+> The rules page's §07 table currently states Standard's daily loss as **5%**.
+> Two independent live accounts disagree, 9 days apart:
+> - 2026-07-06 (older key): `max_daily_drawdown_pct = 4`, `alert_drawdown_pct = 5`.
+> - 2026-07-15 (fresh key, different account): `/exchange-accounts` gives
+>   `max_daily_drawdown_pct = 4` **and** `/event-contracts/context.risk` gives
+>   `daily_loss_limit = 2000` on a $50,000 account = **4%** — two independently
+>   computed fields on the *same* account agree with each other and with the
+>   older account.
+>
+> Three consistent live data points vs. one rules-page number that also moved
+> around between checks (see `challenge-rules.md`'s catalog-churn caveat) — the
+> live figure (**4%**) is trusted here. **Reported as issue #12 in
+> `A9Fund-API-issues.md`**; the published page most likely needs a fix, not the
+> account. Starter's and Fast's daily-loss lines are still unverified live (no
+> test account of those tracks was available) — treat their **4%** as the
+> published-page value only until confirmed.
 
 ## Leverage caps
 

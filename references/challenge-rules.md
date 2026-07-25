@@ -2,16 +2,20 @@
 
 > Sources, in the order this file trusts them: (1) live API responses
 > (`/exchange-accounts` risk object, `/event-contracts/context`) — always wins
-> when available; (2) the published rules page, sourced from its i18n data
-> (`frontend-v2/src/messages/{locale}.json` key `marketingRules`, structured
-> `navGroups`/`sections`, per `docs/customer_service/knowledge_source.md`) —
-> re-checked 2026-07-15; (3) the backend code snapshot
-> (`docs/rules-authoritative.md`, `RULES_VERSION = "2026-06-21.v1"`). Sources
-> 2 and 3 have drifted apart on several numbers (catalog tiers/pricing, loss
-> limits, profitable-days count, payout cap) — each is flagged below.
-> **This pass could not be live-verified** (the test API key had expired,
-> `401 invalid or expired token`) — re-run the live checks in
-> `scripts/config.py bind` / `risk_status.py` once a fresh key is available.
+> when available, and **this file was live-verified on 2026-07-15** against a
+> Standard $50k Challenge account (a prior key had expired mid-review; a fresh
+> one confirmed the loss lines below); (2) the published rules page, sourced
+> from its i18n data (`frontend-v2/src/messages/{locale}.json` key
+> `marketingRules`, structured `navGroups`/`sections`, per
+> `docs/customer_service/knowledge_source.md`) — re-checked 2026-07-15;
+> (3) the backend code snapshot (`docs/rules-authoritative.md`,
+> `RULES_VERSION = "2026-06-21.v1"`). Sources 2 and 3 have drifted apart on
+> several numbers (catalog tiers/pricing, loss limits, profitable-days count,
+> payout cap) — each is flagged below. **The live check even caught the
+> published rules page itself being wrong** on Standard's daily loss line (see
+> `references/risk-rules.md`) — live data is the most trustworthy source here.
+> No Starter or Fast test account was available, so those tracks' numbers are
+> still page-sourced, not live-confirmed.
 
 **Architecture premise (decides "who enforces what").** This backend is NOT on
 the trade write path — order placement / cancel / leverage go straight from the

@@ -59,10 +59,11 @@ Same `bind` command switches accounts later.
 A9Fund's backend is **not** on the trade write path — **propdesk enforces all
 real-time risk**. One breach is terminal. Per track:
 
-- **Cumulative loss:** Starter 8%, Standard 8%, Fast 6% (re-checked 2026-07-15;
-  always confirm against the account's live `max_drawdown_pct` — this table has
-  changed more than once, see `references/risk-rules.md`).
-- **Daily loss:** Starter 4%, Standard 5%, Fast 4%.
+- **Cumulative loss:** Starter 8%, Standard 8%, Fast 6% (Standard live-verified
+  2026-07-15; always confirm against the account's live `max_drawdown_pct` —
+  this table has changed more than once, see `references/risk-rules.md`).
+- **Daily loss:** Starter 4%, Standard 4% (live-confirmed — the published rules
+  page currently says 5%, live data disagrees), Fast 4%.
 - **Leverage:** challenge 10X / fund 5X (single scalar; UI per-asset numbers are
   display only).
 - **Rate limit:** 5 orders/sec per account.

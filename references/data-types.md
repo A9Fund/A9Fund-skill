@@ -122,3 +122,17 @@ is not supported for attached TP/SL.
 See `event-contracts.md`. Inputs: `symbol` ∈ {BTCUSDT, ETHUSDT}, `direction` ∈
 {UP, DOWN}, `duration` ∈ {10m, 30m, 1h, 1d}, `premium` > 0. Settled states are
 WIN / LOSS; 6 settled unlock activation.
+
+### `/event-contracts/context` top-level `risk` sub-object (a second, distinct
+risk snapshot from the one under `/exchange-accounts`)
+
+| Field | Notes |
+| --- | --- |
+| `max_loss_limit` | Absolute USDT amount of the cumulative-loss budget (= `max_drawdown_pct` × `account_size`, e.g. `4000` on a $50k Standard account at 8%) |
+| `max_buffer_remaining` | Remaining cumulative-loss headroom in USDT before breach |
+| `daily_loss_limit` | Absolute USDT amount of today's daily-loss budget (= `max_daily_drawdown_pct` × `account_size`) |
+| `daily_buffer_remaining` | Remaining daily-loss headroom in USDT before breach |
+| `breached` | bool — whether either line has been hit |
+
+These are USDT amounts against the static `account_size`, unlike
+`event_risk_budget` (below), which is a percentage of **current equity**.

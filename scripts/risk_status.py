@@ -25,7 +25,7 @@ _STARTER = {
 }
 _STANDARD = {
     # Two-phase: 8% (phase1) then 5% (phase2). Shown as a note; use current phase target.
-    "profit_target_pct": "8 -> 5 (two-phase)", "daily_loss_pct": 5, "cum_loss_pct": 8, "alert_pct": None,
+    "profit_target_pct": "8 -> 5 (two-phase)", "daily_loss_pct": 4, "cum_loss_pct": 8, "alert_pct": None,
     "min_profitable_days": 3, "consistency_pct": 40, "profit_split_pct": 80,
 }
 _FAST = {
@@ -37,7 +37,7 @@ THRESHOLDS_BY_TRACK = {"starter": _STARTER, "standard": _STANDARD, "fast": _FAST
 
 RULE_REMINDERS = [
     "Drawdown is death: cumulative-loss red line (Starter 8%, Standard 8%, Fast 6%) "
-    "and daily-loss line (Starter 4%, Standard 5%, Fast 4%) are enforced by propdesk "
+    "and daily-loss line (Starter 4%, Standard 4%, Fast 4%) are enforced by propdesk "
     "in real time -- one breach fails the account. A live alert_drawdown_pct may also be present.",
     "Leverage caps: challenge phase 10X, fund phase 5X (propdesk enforces at order time).",
     "Rate limit: max 5 orders per second per account.",

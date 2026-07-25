@@ -18,7 +18,7 @@ runtime (verified live):
 | Duration | `10m`, `30m`, `1h`, `1d` |
 | Odds band | **0.2 – 0.8** |
 | Stake per contract | **0.5% – 2% of account equity** (live: `min_premium` = 10 USDT; `max_single_premium` = 2% of equity) |
-| **Total risk budget** | **Challenge Account: 5% of current equity; Fund Account: 3%** — the combined stake across all open contracts can't exceed this (live: `event_risk_budget` / `event_risk_available` in `context`). Cross-confirmed live: a $50k Standard Challenge account showed `event_risk_budget = 2499.79` ≈ 5.00% of equity. |
+| **Total risk budget** | **Challenge Account: 5% of CURRENT EQUITY; Fund Account: 3%** — the combined stake across all open contracts can't exceed this (live: `event_risk_budget` / `event_risk_available` in `context`). Confirmed live twice: `event_risk_budget` was exactly 5.00% of `current_equity` on two different Standard Challenge accounts (2026-07-06 and 2026-07-15). **The denominator is `current_equity`, not the static `account_size`** — on an account with real profit (equity > baseline), dividing by `account_size` instead gives a wrong, inflated ratio (e.g. 6.06% on an account whose equity had grown to $60.5k on a $50k baseline — still exactly 5% of the $60.5k equity). |
 | Max concurrent open | **3** (`max_open_count`) |
 | Same underlying | **at most 1 open** per symbol / strongly-correlated event |
 | **Trading ↔ prediction exclusivity** | A trading position and prediction exposure on the **same crypto must not stack** — holding a BTC-USDT position blocks a BTCUSDT prediction, and vice versa (FAQ: "同 crypto 的交易仓位与 prediction exposure 不得互相叠加") |
