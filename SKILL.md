@@ -166,13 +166,15 @@ audit trail.
 Full detail in `references/risk-rules.md` and `references/challenge-rules.md`.
 Summary — **propdesk enforces these in real time; one breach is terminal**:
 
-- **Drawdown red lines (per track):** cumulative loss Starter/Fast **6%**,
-  Standard **8%** (Standard alerts at 5%); daily loss Starter/Fast **3%**,
-  Standard **4%**. Reaching the cumulative line fails the account.
+- **Drawdown red lines (per track, re-checked 2026-07-15 — verify against the
+  account's LIVE `max_drawdown_pct`/`max_daily_drawdown_pct`, this table
+  changes):** cumulative loss Starter **8%**, Standard **8%**, Fast **6%**;
+  daily loss Starter **4%**, Standard **5%**, Fast **4%**. Reaching the
+  cumulative line fails the account.
 - **Leverage caps:** challenge phase **10X**, fund phase **5X**. Single scalar —
   ignore any per-asset numbers shown in the UI; trust what propdesk accepts.
 - **Rate limit:** max **5 orders/sec** per account (sleep ≥ 250 ms when batching).
-- **Profitable days to pass / payout:** Starter **2**, Fast **3**, Standard
+- **Profitable days to pass / payout:** Starter **3**, Fast **3**, Standard
   **3 per phase**. A profitable day = a UTC calendar day with positive
   **realized** PnL.
 - **Profit targets:** Starter 8%, Standard 8% → 5% (two-phase), Fast 10%.
@@ -183,7 +185,8 @@ Summary — **propdesk enforces these in real time; one breach is terminal**:
   consistency blocks pass/payout (temporary blocker, not a fail).
 - **Event contracts:** symbols {BTCUSDT, ETHUSDT}, direction {UP, DOWN}, duration
   {10m, 30m, 1h, 1d}, **odds 0.2–0.8**, **stake 0.5–2% of equity** (min 10 USDT),
-  **max 3 open**, **max 1 per symbol**, fixed **80%** payout. Profit counts toward
+  **total risk budget 5% (Challenge) / 3% (Fund) of equity**, **max 3 open**,
+  **max 1 per symbol**, fixed **80%** payout. Profit counts toward
   passing only after **6 settled**; any open/disputed contract blocks pass and
   payout. **Same-asset exclusivity:** a trading position and a prediction on the
   same crypto must not coexist — check positions before buying a prediction and
@@ -195,11 +198,14 @@ Summary — **propdesk enforces these in real time; one breach is terminal**:
   the account's max leverage, and fraud. Report backend bugs instead of trading
   on them (profits are clawback-eligible).
 - **Payout:** profit share, first eligible **14 days after fund activation** then
-  every 14 days; trader **70%** Starter / **80%** Standard·Fast (up to 90%
-  healthy); min request $50 / $100; **single-cycle cap ~5% of account size**
-  (first cycle up to 3%); requires **KYC**, no open positions, no unsettled event
-  contracts. Wallet withdrawal min $100, 1% fee, days 8/18/28, networks
-  ARB/POL/BSC, coins USDT/USDC.
+  every 14 days; trader **70%** Starter / **80%** Standard (up to 90% healthy) /
+  **85%** Fast; also needs a **per-cycle profit target** (Starter 8% / Fast 10% /
+  Standard 5% of remaining profit) on top of the min request $50 / $100; requires
+  **KYC**, no open positions, no unsettled event contracts, ≤ 1 successful
+  payout/day. *Sources disagree on whether there's also a fixed %-of-account cap
+  (rules page: no; FAQ: ~5%, first cycle 3%) — see `references/challenge-rules.md`.*
+  Wallet withdrawal min $100, 1% fee, days 8/18/28, networks ARB/POL/BSC, coins
+  USDT/USDC.
 
 ## Failure fallback
 

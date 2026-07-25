@@ -1,9 +1,17 @@
 # Challenge rules (A9Fund)
 
-> Source of truth: the A9Fund backend code (`backend_next` + `frontend-v2`),
-> captured in `docs/rules-authoritative.md`. Rules version (in code):
-> `RULES_VERSION = "2026-06-21.v1"`. Where a product/marketing doc disagrees
-> with the code, the code wins.
+> Sources, in the order this file trusts them: (1) live API responses
+> (`/exchange-accounts` risk object, `/event-contracts/context`) — always wins
+> when available; (2) the published rules page, sourced from its i18n data
+> (`frontend-v2/src/messages/{locale}.json` key `marketingRules`, structured
+> `navGroups`/`sections`, per `docs/customer_service/knowledge_source.md`) —
+> re-checked 2026-07-15; (3) the backend code snapshot
+> (`docs/rules-authoritative.md`, `RULES_VERSION = "2026-06-21.v1"`). Sources
+> 2 and 3 have drifted apart on several numbers (catalog tiers/pricing, loss
+> limits, profitable-days count, payout cap) — each is flagged below.
+> **This pass could not be live-verified** (the test API key had expired,
+> `401 invalid or expired token`) — re-run the live checks in
+> `scripts/config.py bind` / `risk_status.py` once a fresh key is available.
 
 **Architecture premise (decides "who enforces what").** This backend is NOT on
 the trade write path — order placement / cancel / leverage go straight from the
@@ -16,17 +24,17 @@ actually fails an account.
 
 ## Account paths and tiers
 
-Three paths, six SKUs (published rules qa.a9fund.com/rules, Updated 2026-06-24,
-re-checked 2026-07-13):
+Three paths, six SKUs. Pricing/tiers per the published rules page (re-checked
+2026-07-15 — **the catalog has changed more than once**; see the caveat below):
 
 | SKU | Path | Size | Price | Stage(s) | Profit target | Min profitable days | Profit split |
 |---|---|---|---|---|---|---|---|
-| `starter_5k`    | Starter  | $5,000   | $49  | 1-stage (funded on purchase) | 8%      | 2 | 70% |
-| `starter_10k`   | Starter  | $10,000  | $99  | 1-stage                      | 8%      | 2 | 70% |
+| `starter_2k`    | Starter  | $2,000   | $49  | 1-stage (funded on purchase) | 8%      | 3 | 70% |
+| `starter_5k`    | Starter  | $5,000   | $119 | 1-stage                      | 8%      | 3 | 70% |
 | `standard_25k`  | Standard | $25,000  | $199 | 2-stage (8% → 5%)            | 8% → 5% | 3 **per phase** | 80% (90% when healthy) |
 | `standard_50k`  | Standard | $50,000  | $349 | 2-stage (8% → 5%)            | 8% → 5% | 3 **per phase** | 80% (90% when healthy) |
-| `fast_10k`      | Fast     | $10,000  | $149 | 1-stage                      | 10%     | 3 | 80% |
-| `fast_25k`      | Fast     | $25,000  | $299 | 1-stage                      | 10%     | 3 | 80% |
+| `fast_10k`      | Fast     | $10,000  | $179 | 1-stage                      | 10%     | 3 | 85% |
+| `fast_25k`      | Fast     | $25,000  | $449 | 1-stage                      | 10%     | 3 | 85% |
 
 - Standard $50K is the default recommended plan.
 - Pricing model: one-time challenge fee + funded-account profit split. No
@@ -37,26 +45,35 @@ re-checked 2026-07-13):
 
 > The `mode` key this skill stores is `starter-5k` / `standard-50k` / `fast-25k`
 > etc. `config.py bind` resolves it from `/event-contracts/context`
-> (`program_type`) or, failing that, from the `/exchange-accounts` risk drawdown
-> signature + capital; set it manually with `--skip-lookup --mode <...>` if
-> neither resolves it (e.g. the $10k Starter-vs-Fast overlap).
+> (`program_type`) or, failing that, from the `/exchange-accounts` risk
+> drawdown signature + capital tier; set it manually with
+> `--skip-lookup --mode <...>` if neither resolves it.
 
-> ℹ️ The rules page briefly listed Standard $100K ($649) and Fast $50K ($499);
-> as of 2026-07-13 those tiers are gone again and the page matches the backend
-> catalog's 6 SKUs. `bind`'s fallback inference still tolerates those tiers if
-> an account is ever issued at them (thresholds are per-*track*, not per-tier).
+> ⚠️ **Catalog keeps changing — treat this table as a snapshot, not a
+> constant.** Timeline observed across repeated checks of the same page:
+> 2026-07-07 → 6 SKUs (Starter $5k/$10k, Fast $10k/$25k, profit split Fast
+> 80%); 2026-07-13 briefly → 8 SKUs (added Standard $100k, Fast $50k);
+> 2026-07-15 → back to 6 SKUs but with **Starter retiered to $2k/$5k** and
+> **Fast's profit split raised to 85%**, plus new prices for Starter/Fast.
+> Standard's tiers/pricing/split have stayed constant throughout. Do not
+> hardcode tier assumptions anywhere outside `config.py`'s inference helpers —
+> and re-verify this table before relying on it for anything price-sensitive
+> (e.g. quoting a user a challenge fee).
 
 ## Markets
 
-- **Crypto trading:** initial pairs **BTCUSDT, ETHUSDT, SOLUSDT** (account-level
-  leverage only; no per-pair leverage). Accounts are **Binance-referenced
+- **Crypto trading:** first-launch pairs **BTCUSDT, ETHUSDT** (per the
+  2026-07-15 rules page — **SOLUSDT has been removed from the launch list**
+  since the prior check, which had BTCUSDT/ETHUSDT/SOLUSDT). Account-level
+  leverage only, no per-pair leverage. Accounts are **Binance-referenced
   simulation** (real market data, no real exchange orders — `account_type:
-  "paper"` in API responses). FAQ lists BNB/XRP/DOGE/LINK/AVAX/ADA/SUI as later
-  *candidates*, not commitments — trust `markets.py metadata` for what's
-  tradeable now.
+  "paper"` in API responses). The FAQ separately lists
+  BNB/XRP/DOGE/LINK/AVAX/ADA/SUI as later *candidates*, not commitments —
+  trust `markets.py metadata` for what's actually tradeable right now rather
+  than any static list here (this one included).
 - **Prediction / event contracts:** BTCUSDT, ETHUSDT (see
-  `event-contracts.md`). A trading position and a prediction on the same crypto
-  must not coexist.
+  `event-contracts.md`, including the total-risk-budget rule). A trading
+  position and a prediction on the same crypto must not coexist.
 - **Not supported:** political / sports / war / entertainment prediction
   markets, low-liquidity new coins, or any market where slippage / order-book
   depth can't be computed reliably.
@@ -107,13 +124,14 @@ failure, and no active temporary blocker.
 
 ## Minimum profitable days
 
-Starter = **2**, Fast = **3**, Standard = **3 per phase** (published §03
-"固定 每阶段 3"). A profitable day is a UTC calendar day with positive realized
-PnL.
+Starter = **3**, Fast = **3**, Standard = **3 per phase** (published §03/§06).
+A profitable day is a UTC calendar day with positive **realized** PnL.
 
-> ⚠️ **Code vs published:** the backend snapshot counted Standard's days with
-> scope `total` (3 cumulative, not per-phase). The published page says per
-> phase — plan for per-phase (the stricter reading) until the backend confirms.
+> ⚠️ **Code vs published:** the backend snapshot (`rules-authoritative.md`) had
+> Starter at **2** days and counted Standard's days with scope `total` (3
+> cumulative, not per-phase). The rules page now says Starter needs **3** and
+> Standard is per-phase — plan for the stricter published numbers until the
+> backend confirms which is authoritative.
 
 ## Inactivity / termination
 
@@ -151,32 +169,58 @@ at submission time instead.
 
 ## Payout / profit share
 
-See `references/risk-rules.md` §Payout for the full detail. Summary:
+See `references/risk-rules.md` §Payout for the full detail. Summary (published
+rules §11, re-checked 2026-07-15):
 
-- **Profit share** (funded-account profit → platform balance). First eligibility:
-  **14 days after the Fund Account is activated**; then once every **14 days**.
-  Review target **1–3 business days**. Trader split **70%** (Starter) / **80%**
-  (Standard, Fast; up to 90% when healthy). Payout coins **USDC / USDT**.
-  - Minimum request: **$50** (Starter) / **$100** (Standard, Fast).
-  - **Single-cycle cap: ~5% of account size** (first cycle up to **3%**).
-  - Must satisfy **all** of: **KYC completed**; not in daily/max-loss breach; **no
-    open crypto positions**; **no unsettled/disputed** event contracts; account
-    not under abnormal review (incl. **AI-abuse review**); request ≥ minimum and
-    ≤ the cycle cap.
+- **Profit share** (funded-account profit → platform balance). Every request is
+  re-validated against current account state, remaining profit, risk record,
+  positions, and event-contract status — passing once doesn't guarantee the
+  next request passes.
+  - **Time window:** first eligibility **14 days after Fund Account
+    activation**; then every **14 days** since the last payout. Review target
+    **1–3 business days**.
+  - **Per-cycle profit target (new, not previously documented):** remaining
+    profit must reach **Starter 8% / Fast 10% / Standard 5%**, re-evaluated
+    against current remaining profit at each request — this is *in addition
+    to* the minimum dollar amount below, not a replacement for it.
+  - **Minimum request amount:** **$50** (Starter) / **$100** (Standard, Fast).
+  - **Profitable days:** Starter 3 / Standard 3 / Fast 3 (same basis as pass).
+  - **Consistency:** same caps as passing (45/40/35%), **recalculated fresh
+    after each successful payout**.
+  - No daily/max-loss breach; **no open crypto positions**; **no
+    unsettled/disputed** event contracts; no same-asset conflict; event-contract
+    data reconciled (snapshot + balance); **KYC completed**; account not under
+    abnormal review (incl. **AI-abuse review**).
+  - **Request limit:** at most **one successful payout per calendar day**;
+    requested amount cannot exceed currently available profit.
+  - **Final check:** the trading system re-validates the actual deductible
+    balance at execution time — a request can still be rejected here even after
+    passing every check above, if real profit turns out insufficient.
+  - Trader split **70%** (Starter) / **80%** (Standard, up to 90% when
+    healthy) / **85%** (Fast). Payout coins **USDC / USDT** (USDC preferred).
 - **Wallet withdrawal** (platform balance → chain): minimum **$100** for
   everyone, **1%** fee, withdrawal days **8 / 18 / 28**, networks **ARB / POL /
   BSC**, coins **USDT / USDC**. Mainnet withdrawal is not yet live (testnet
   default; mainnet token contracts are placeholders).
 
-> ⚠️ **Code vs published rules:** the code snapshot (`rules-authoritative.md`)
-> did not yet enforce KYC or the 5%/3% cycle cap in the funds path; the public
-> rules page (2026-06-24) lists both as requirements. Follow the published rules
-> — treat KYC and the cycle cap as real payout gates.
+> ⚠️ **Three-way conflict on the payout cap — needs dev clarification.**
+> Whether there's a fixed percent-of-account payout cap is stated
+> inconsistently across sources:
+> - **Rules page (2026-07-15, current):** no % cap — only "once per day" +
+>   "≤ currently available profit".
+> - **FAQ (`faq-content.ts`, same repo, not necessarily same freshness):**
+>   "Max payout per cycle = 5% of account size, first cycle up to 3% soft cap."
+> - **Backend code snapshot (`rules-authoritative.md`):** no cap coded in the
+>   funds path at all (only "≤ available profit"); KYC also not coded there.
+>
+> Until this is resolved, do not promise a user a specific payout ceiling
+> beyond "your available profit, checked at request time" — quoting the 5%/3%
+> figure from the FAQ risks being wrong if the rules page is more current.
 
 ## The three iron laws
 
 | Law | How it is enforced |
 |---|---|
-| 🚫 **Drawdown = out** | Cumulative drawdown: propdesk real-time + backend backstop. Daily drawdown: propdesk only (two-strike: alert then breach). |
+| 🚫 **Drawdown = out** | Cumulative drawdown: propdesk real-time + backend backstop. Daily drawdown: propdesk only — treat any hit as potentially terminal (the published page no longer describes a two-strike alert/breach sequence). |
 | 🚫 **No one-shot clear** | Event contracts need 6 settled before they count; profit target is cumulative, no single trade clears it. |
-| 🚫 **Must earn on enough days** | Profitable-days check at pass and at payout (Starter 2 / Standard 3 / Fast 3). |
+| 🚫 **Must earn on enough days** | Profitable-days check at pass and at payout (Starter 3 / Standard 3 per phase / Fast 3). |

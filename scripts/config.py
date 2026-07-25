@@ -91,12 +91,20 @@ def _tier_from_capital(capital) -> str | None:
 def _infer_mode_from_risk(program_id: str, max_dd, capital) -> str | None:
     """Best-effort mode when the account carries no program_id.
 
-    The A9Fund /exchange-accounts response has no program_id/sku, but the risk
-    sub-object exposes the cumulative-loss red line, whose value is track-
-    specific: Standard = 8%, Starter/Fast = 6%. Combine that with the capital
-    tier to name the mode. Starter vs Fast at the same 6% line and same tier
-    (only the $10k overlap) is genuinely ambiguous from this data -> returns
-    None so the caller asks for --mode.
+    The A9Fund /exchange-accounts response has no program_id/sku, so this falls
+    back to capital tier, with max_drawdown_pct only as a tie-breaker where
+    tiers overlap across tracks.
+
+    Catalog as of the published rules page (qa.a9fund.com/rules, re-checked
+    2026-07-15): Starter $2k/$5k, Fast $10k/$25k, Standard $25k/$50k. Only the
+    $25k tier overlaps (Fast vs Standard) -- resolved via max_drawdown_pct,
+    which is track-specific there: Standard = 8%, Fast = 6%. (Starter is ALSO
+    8% under the current published rules, but its tiers ($2k/$5k) don't
+    overlap with anything else, so no tie-break is needed for it.)
+
+    Note: accounts issued under an earlier catalog (e.g. Starter $5k/$10k) may
+    not resolve here -- the caller should fall back to
+    `--skip-lookup --mode <...>` rather than guess.
     """
     mode = _mode_from_program_id(program_id)
     if mode:
@@ -104,18 +112,22 @@ def _infer_mode_from_risk(program_id: str, max_dd, capital) -> str | None:
     tier = _tier_from_capital(capital)
     if tier is None:
         return None
-    try:
-        dd = float(max_dd) if max_dd not in (None, "") else None
-    except (TypeError, ValueError):
-        dd = None
-    if dd is not None and dd >= 7:          # 8% line -> Standard ($25k/$50k/$100k)
-        return f"standard-{tier}"
-    # 6% line -> Starter ($5k/$10k) or Fast ($10k/$25k/$50k)
-    if tier == "5k":                         # only Starter is issued at $5k
+    if tier in ("2k", "5k"):                 # unique to Starter, no tie-break needed
         return f"starter-{tier}"
-    if tier in ("25k", "50k"):               # at 6% line, $25k/$50k is Fast
+    if tier == "10k":                        # unique to Fast
         return f"fast-{tier}"
-    return None                              # $10k @ 6% -> starter_10k vs fast_10k ambiguous
+    if tier == "50k":                        # unique to Standard
+        return f"standard-{tier}"
+    if tier == "25k":                        # overlap: Fast vs Standard
+        try:
+            dd = float(max_dd) if max_dd not in (None, "") else None
+        except (TypeError, ValueError):
+            dd = None
+        if dd is not None and dd >= 7:
+            return f"standard-{tier}"
+        if dd is not None:
+            return f"fast-{tier}"
+    return None                              # unrecognised tier, or ambiguous $25k with no dd data
 
 
 def _dig(obj: dict, *keys: str) -> Any:
@@ -281,7 +293,7 @@ def cmd_bind(args) -> None:
             "Could not determine the account's mode from /exchange-accounts.\n"
             "Set it explicitly:\n"
             "  python3 config.py bind --account-id <id> --skip-lookup \\\n"
-            "    --mode <starter-5k|starter-10k|standard-25k|standard-50k|fast-10k|fast-25k> \\\n"
+            "    --mode <starter-2k|starter-5k|standard-25k|standard-50k|fast-10k|fast-25k> \\\n"
             "    --phase <challenge|fund> --initial-balance <amount>"
         )
     if not phase:
