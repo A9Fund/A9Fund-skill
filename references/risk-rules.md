@@ -1,62 +1,64 @@
 # Risk and violation rules (A9Fund)
 
-> Sources: live API (always wins when available — re-verified 2026-07-15 on a
-> fresh Standard $50k Challenge account after the prior key expired); published
-> rules page i18n source (`marketingRules` in `messages/{locale}.json`, also
-> re-checked 2026-07-15); backend code snapshot (`docs/rules-authoritative.md`,
+> Sources: live API (always wins when available); published rules page i18n
+> source (`marketingRules` in `messages/{locale}.json`, re-checked 2026-07-15);
+> backend code snapshot (`docs/rules-authoritative.md`,
 > `RULES_VERSION = "2026-06-21.v1"`). Real-time risk is enforced by
-> **propdesk**; the backend publishes parameters, records terminal results, and
-> reconciles. See `challenge-rules.md` for the catalog/pricing side of the same
-> re-check, including a caveat that these tables have changed more than once.
-> **The live re-check found the published rules page is itself wrong on one
-> number** (Standard's daily loss line) — see the table below.
+> **propdesk**; the backend publishes rule parameters to propdesk **once, at
+> account creation** (see the architecture premise in `challenge-rules.md`) —
+> this means **an account's risk thresholds are locked in at purchase time and
+> do not retroactively follow later catalog changes.** Confirmed by testing
+> four live accounts of different ages across 2026-07-06 → 07-15 (below); this
+> file initially mis-read a vintage difference as a rules-page error — see the
+> correction in the drawdown table.
 
 ## Drawdown red lines (per track)
 
-Per **live API data** (confirmed 2026-07-15 on a Standard $50k Challenge
-account, via two independent fields — `/exchange-accounts` risk object AND
-`/event-contracts/context` risk sub-object agree) — this overrides the
-published rules page for Standard's daily loss line, see caveat below:
+Live-verified 2026-07-15 across **four accounts, three tracks, two Standard
+vintages**:
 
-| | Starter | Standard | Fast |
-|---|---|---|---|
-| Daily max loss      | 4% (unverified live — no Starter test account) | **4% (live-confirmed)** | 4% (unverified live — no Fast test account) |
-| Cumulative max loss | 8% (unverified live) | **8% (live-confirmed)** | 6% (unverified live) |
-| Alert line          | not published | 5% (live-confirmed field `alert_drawdown_pct`) | not published |
+| | Starter | Standard (current) | Standard (older accounts) | Fast |
+|---|---|---|---|---|
+| Daily max loss      | unverified (no test account) | **5%** | 4% | **4% (live-confirmed)** |
+| Cumulative max loss | unverified | **8% (live-confirmed)** | 8% | **6% (live-confirmed)** |
+| Alert line (vs. cumulative) | unverified | **5% (live-confirmed)** | 5% | **6% = same as max (live-confirmed) — no separate soft-warning tier** |
 
 **Enforcement:**
 - **Cumulative drawdown** → propdesk real-time (`DRAWDOWN_BREACH`); backend
   re-checks daily as a backstop. Reaching the line (`≥`) fails the account.
-  "Static" per the rules page means the line is fixed against baseline
-  capital, not a rolling/relative figure.
 - **Daily drawdown** → **propdesk only**. The rules page no longer describes a
   two-strike alert/breach sequence for daily drawdown; treat any daily-loss
   line hit as potentially terminal, not just a warning.
+- **Alert line is paired with the CUMULATIVE line, not the daily one** (confirmed:
+  it's always ≤ `max_drawdown_pct`, and sits between the daily and cumulative
+  lines on Standard). Where a track has no distinct soft-warning tier (Fast),
+  `alert_drawdown_pct` simply equals `max_drawdown_pct` — the "alert" fires
+  exactly at breach, i.e. there effectively isn't an early warning.
 - **`risk_status.py` always prefers the account's LIVE `max_drawdown_pct` /
   `max_daily_drawdown_pct` / `alert_drawdown_pct`** (from `/exchange-accounts`)
-  over this table — this table is only the fallback when live data isn't
-  available. Trust the live numbers.
+  over the fallback table below — so **any individual account is always read
+  correctly regardless of its vintage.** The fallback table (used only when
+  live data is unavailable) reflects the *current* catalog, i.e. what a fresh
+  purchase gets today.
 
 A drawdown breach is terminal — one hit and the account is done. There is no
 human waiver.
 
-> ⚠️ **Published-page bug found and corrected via live data (2026-07-15).**
-> The rules page's §07 table currently states Standard's daily loss as **5%**.
-> Two independent live accounts disagree, 9 days apart:
-> - 2026-07-06 (older key): `max_daily_drawdown_pct = 4`, `alert_drawdown_pct = 5`.
-> - 2026-07-15 (fresh key, different account): `/exchange-accounts` gives
->   `max_daily_drawdown_pct = 4` **and** `/event-contracts/context.risk` gives
->   `daily_loss_limit = 2000` on a $50,000 account = **4%** — two independently
->   computed fields on the *same* account agree with each other and with the
->   older account.
->
-> Three consistent live data points vs. one rules-page number that also moved
-> around between checks (see `challenge-rules.md`'s catalog-churn caveat) — the
-> live figure (**4%**) is trusted here. **Reported as issue #12 in
-> `A9Fund-API-issues.md`**; the published page most likely needs a fix, not the
-> account. Starter's and Fast's daily-loss lines are still unverified live (no
-> test account of those tracks was available) — treat their **4%** as the
-> published-page value only until confirmed.
+> ℹ️ **Self-correction, in the interest of an accurate record.** An earlier
+> version of this file concluded the rules page had a typo (claiming Standard's
+> daily loss was actually 4%, not the published 5%), based on two Standard
+> accounts that both showed 4% live. That conclusion was **wrong** — a third
+> Standard account (a fresh $25k purchase, tested 2026-07-15) came back
+> `max_daily_drawdown_pct = 5`, matching the rules page exactly. The correct
+> explanation: risk parameters are **published to propdesk once, at account
+> creation**, so they don't change retroactively when the catalog updates later
+> — the two 4% accounts were simply purchased before Standard's daily-loss line
+> moved from 4% to 5%. The rules page was right all along; the two older
+> accounts are grandfathered, not evidence of a page bug. **Issue #12 in
+> `A9Fund-API-issues.md` has been retracted/reclassified accordingly** — this is
+> expected platform behavior, not a defect. Starter's numbers are still
+> completely unverified live (no Starter test account obtained) — treat the
+> published-page values for Starter as unconfirmed until tested.
 
 ## Leverage caps
 

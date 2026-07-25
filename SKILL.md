@@ -166,13 +166,15 @@ audit trail.
 Full detail in `references/risk-rules.md` and `references/challenge-rules.md`.
 Summary — **propdesk enforces these in real time; one breach is terminal**:
 
-- **Drawdown red lines (per track, live-verified 2026-07-15 for Standard;
-  Starter/Fast still from the published page — always confirm against the
-  account's LIVE `max_drawdown_pct`/`max_daily_drawdown_pct`):** cumulative
-  loss Starter **8%**, Standard **8%**, Fast **6%**; daily loss Starter **4%**,
-  Standard **4%** (live-confirmed — the published rules page currently says 5%
-  but two independent live reads disagree, see `references/risk-rules.md`),
-  Fast **4%**. Reaching the cumulative line fails the account.
+- **Drawdown red lines (per track, live-verified 2026-07-15 across 4 accounts
+  for Standard/Fast; Starter still unverified — always confirm against the
+  account's OWN live `max_drawdown_pct`/`max_daily_drawdown_pct`, never a
+  static table):** cumulative loss Starter **8%**, Standard **8%**, Fast
+  **6%**; daily loss Starter **4%**, Standard **5% for new accounts / 4% for
+  accounts purchased before the catalog updated**, Fast **4%**. Risk
+  parameters are locked in at account creation and don't change retroactively
+  — see `references/risk-rules.md` for the full vintage-dependency finding.
+  Reaching the cumulative line fails the account.
 - **Leverage caps:** challenge phase **10X**, fund phase **5X**. Single scalar —
   ignore any per-asset numbers shown in the UI; trust what propdesk accepts.
 - **Rate limit:** max **5 orders/sec** per account (sleep ≥ 250 ms when batching).

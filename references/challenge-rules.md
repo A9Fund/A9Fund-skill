@@ -2,20 +2,17 @@
 
 > Sources, in the order this file trusts them: (1) live API responses
 > (`/exchange-accounts` risk object, `/event-contracts/context`) — always wins
-> when available, and **this file was live-verified on 2026-07-15** against a
-> Standard $50k Challenge account (a prior key had expired mid-review; a fresh
-> one confirmed the loss lines below); (2) the published rules page, sourced
-> from its i18n data (`frontend-v2/src/messages/{locale}.json` key
-> `marketingRules`, structured `navGroups`/`sections`, per
+> when available, and **this file was live-verified on 2026-07-15 across four
+> accounts** (two Standard, one Fast, spanning two purchase dates — see the
+> vintage-locking finding below); (2) the published rules page, sourced from
+> its i18n data (`frontend-v2/src/messages/{locale}.json` key `marketingRules`,
+> structured `navGroups`/`sections`, per
 > `docs/customer_service/knowledge_source.md`) — re-checked 2026-07-15;
 > (3) the backend code snapshot (`docs/rules-authoritative.md`,
 > `RULES_VERSION = "2026-06-21.v1"`). Sources 2 and 3 have drifted apart on
-> several numbers (catalog tiers/pricing, loss limits, profitable-days count,
-> payout cap) — each is flagged below. **The live check even caught the
-> published rules page itself being wrong** on Standard's daily loss line (see
-> `references/risk-rules.md`) — live data is the most trustworthy source here.
-> No Starter or Fast test account was available, so those tracks' numbers are
-> still page-sourced, not live-confirmed.
+> several numbers (catalog tiers/pricing, profitable-days count, payout cap) —
+> each is flagged below. **No Starter test account was available**, so
+> Starter's numbers are still page-sourced, not live-confirmed.
 
 **Architecture premise (decides "who enforces what").** This backend is NOT on
 the trade write path — order placement / cancel / leverage go straight from the
@@ -23,6 +20,17 @@ front-end to **propdesk** (the external matching + risk engine). All *real-time*
 risk (drawdown, leverage, position, event-contract odds/stake) is enforced by
 **propdesk**. The backend only (1) publishes rule parameters to propdesk, (2)
 records propdesk's terminal results, and (3) does a daily reconciliation pass.
+
+> **Confirmed consequence of (1) — risk parameters are vintage-locked.**
+> Because publishing happens once, at account creation, an account's actual
+> risk thresholds reflect the catalog *at the time it was purchased*, not
+> whatever the catalog says today. Live-verified 2026-07-15: two Standard
+> accounts purchased before some date both show `max_daily_drawdown_pct = 4`,
+> while a fresh Standard purchase that same day shows `= 5` (matching the
+> current published rules page exactly). **Always read an account's own live
+> risk fields — never assume a rules-page number applies to an account that
+> might predate it.** `risk_status.py` already does this correctly (always
+> prefers live data); this note is for anyone reading the docs by hand.
 So "the agent must trade within these numbers" — but propdesk is the thing that
 actually fails an account.
 

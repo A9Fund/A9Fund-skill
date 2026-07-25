@@ -87,7 +87,7 @@ Published example is bare: `{"total": "...", "available": "...",
 | Field | Notes |
 |---|---|
 | max_drawdown_pct | Cumulative-loss red line (percent) — the threshold |
-| alert_drawdown_pct | Alert line (Standard only) |
+| alert_drawdown_pct | Soft-warning line for CUMULATIVE loss (always ≤ `max_drawdown_pct`). Live-confirmed at 5% on Standard accounts. On tracks with no distinct warning tier (e.g. Fast) this simply equals `max_drawdown_pct` — no early warning. |
 | max_daily_drawdown_pct | Daily-drawdown red line |
 | max_cumulative_loss_pct | Current cumulative loss rate = `(baseline − min(trough, current)) / baseline × 100`; `"0"` while in profit. **Use this for the max-loss figure** (same basis as `max_drawdown_pct`) |
 | current_drawdown_pct | Pullback from the historical peak — display only, NOT comparable to the red line |

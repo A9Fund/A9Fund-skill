@@ -13,23 +13,34 @@ from _common import get_active_exchange, http_request, load_config, print_json, 
 
 
 # A9Fund catalog thresholds, per track (qa.a9fund.com/rules, re-checked
-# 2026-07-15). daily_loss_pct / cum_loss_pct = drawdown red lines. alert_pct =
-# soft warning line -- the published page no longer states a fixed value, but
-# the live /exchange-accounts risk object may still return alert_drawdown_pct
-# (risk_status.py always prefers that live value over this fallback).
+# 2026-07-15, cross-verified against 4 live accounts). daily_loss_pct /
+# cum_loss_pct = drawdown red lines. alert_pct = soft-warning line for
+# CUMULATIVE loss (not daily); None here means "no distinct tier" -- live data
+# shows it then equals cum_loss_pct (fires at breach, i.e. no early warning).
 # consistency_pct = single-day profit-share cap (enforced at pass/payout, not
 # trade time). profit_target_pct is the pass target.
+#
+# IMPORTANT: risk parameters are published to propdesk ONCE, at account
+# creation, and do NOT change retroactively when this catalog updates later.
+# So an existing account's live values can legitimately differ from the
+# numbers below (e.g. two Standard accounts purchased before 2026-07-15 both
+# showed daily_loss=4%, while a fresh Standard purchase that day showed 5% --
+# both are correct for their respective vintage). This table is only the
+# fallback for when live data is unavailable; risk_status.py always prefers
+# the account's own live figures, so this vintage effect never causes a wrong
+# reading for a real account -- it only means "no live data" falls back to
+# what a FRESH purchase gets today, not what any specific existing account has.
 _STARTER = {
     "profit_target_pct": 8, "daily_loss_pct": 4, "cum_loss_pct": 8, "alert_pct": None,
     "min_profitable_days": 3, "consistency_pct": 45, "profit_split_pct": 70,
 }
 _STANDARD = {
     # Two-phase: 8% (phase1) then 5% (phase2). Shown as a note; use current phase target.
-    "profit_target_pct": "8 -> 5 (two-phase)", "daily_loss_pct": 4, "cum_loss_pct": 8, "alert_pct": None,
+    "profit_target_pct": "8 -> 5 (two-phase)", "daily_loss_pct": 5, "cum_loss_pct": 8, "alert_pct": 5,
     "min_profitable_days": 3, "consistency_pct": 40, "profit_split_pct": 80,
 }
 _FAST = {
-    "profit_target_pct": 10, "daily_loss_pct": 4, "cum_loss_pct": 6, "alert_pct": None,
+    "profit_target_pct": 10, "daily_loss_pct": 4, "cum_loss_pct": 6, "alert_pct": 6,
     "min_profitable_days": 3, "consistency_pct": 35, "profit_split_pct": 85,
 }
 
@@ -37,8 +48,10 @@ THRESHOLDS_BY_TRACK = {"starter": _STARTER, "standard": _STANDARD, "fast": _FAST
 
 RULE_REMINDERS = [
     "Drawdown is death: cumulative-loss red line (Starter 8%, Standard 8%, Fast 6%) "
-    "and daily-loss line (Starter 4%, Standard 4%, Fast 4%) are enforced by propdesk "
-    "in real time -- one breach fails the account. A live alert_drawdown_pct may also be present.",
+    "and daily-loss line (Starter 4%, Standard 5% for new accounts/4% for older ones, Fast 4%) "
+    "are enforced by propdesk in real time -- one breach fails the account. "
+    "ALWAYS trust this account's own live max_drawdown_pct/max_daily_drawdown_pct over any table, "
+    "since risk parameters are locked in at account creation and don't retroactively update.",
     "Leverage caps: challenge phase 10X, fund phase 5X (propdesk enforces at order time).",
     "Rate limit: max 5 orders per second per account.",
     "Profitable days (UTC day with positive REALIZED pnl): Starter 3 / Fast 3 / Standard 3 per phase. "
