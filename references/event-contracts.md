@@ -1,9 +1,8 @@
 # Event Contracts (prediction market)
 
-A9Fund-only feature (the reference propdesk skill does not have it). A binary
-contract: pick a **direction** (UP / DOWN) on a **symbol** over a fixed
-**duration**; on a win you receive a fixed **80% payout**, otherwise you lose the
-**premium** (stake).
+A binary contract: pick a **direction** (UP / DOWN) on a **symbol** over a
+fixed **duration**; on a win you receive a fixed **80% payout**, otherwise
+you lose the **premium** (stake).
 
 ## Rules
 
@@ -48,8 +47,8 @@ Respect those live numbers rather than hardcoding.
 
 > Enforcement note: the A9Fund backend directly enforces the activation-6 gate,
 > the input whitelist, and the pass/payout blockers; the quantitative bounds
-> (odds / stake / max-open / same-symbol) are applied at the quote/propdesk
-> layer and surfaced through `context`/`quote`. Either way they are real — an
+> (odds / stake / max-open / same-symbol) are applied at order-submission time
+> and surfaced through `context`/`quote`. Either way they are real — an
 > out-of-band order is rejected.
 
 ## Flow

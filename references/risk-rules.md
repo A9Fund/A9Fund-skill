@@ -1,16 +1,16 @@
 # Risk and violation rules (A9Fund)
 
-> Sources: live API (always wins when available); published rules page i18n
-> source (`marketingRules` in `messages/{locale}.json`, re-checked 2026-07-15);
-> backend code snapshot (`docs/rules-authoritative.md`,
-> `RULES_VERSION = "2026-06-21.v1"`). Real-time risk is enforced by
-> **propdesk**; the backend publishes rule parameters to propdesk **once, at
+> Sources, most authoritative first: (1) live API responses
+> (`/exchange-accounts` risk object) — always wins for a *specific account's
+> own current numbers*; (2) A9Fund's published rules page (re-checked
+> 2026-07-15) for business rules (pass/payout) the real-time risk system
+> itself doesn't decide. Rule parameters are set on an account **once, at
 > account creation** (see the architecture premise in `challenge-rules.md`) —
-> this means **an account's risk thresholds are locked in at purchase time and
-> do not retroactively follow later catalog changes.** Confirmed by testing
-> four live accounts of different ages across 2026-07-06 → 07-15 (below); this
-> file initially mis-read a vintage difference as a rules-page error — see the
-> correction in the drawdown table.
+> **an account's risk thresholds are locked in at purchase time and do not
+> retroactively follow later catalog changes.** Confirmed by testing four
+> live accounts of different ages across 2026-07-06 → 07-15 (below); this
+> file initially mis-read a vintage difference as a rules-page error — see
+> the correction in the drawdown table.
 
 ## Drawdown red lines (per track)
 
@@ -23,12 +23,32 @@ vintages**:
 | Cumulative max loss | unverified | **8% (live-confirmed)** | 8% | **6% (live-confirmed)** |
 | Alert line (vs. cumulative) | unverified | **5% (live-confirmed)** | 5% | **6% = same as max (live-confirmed) — no separate soft-warning tier** |
 
-**Enforcement:**
-- **Cumulative drawdown** → propdesk real-time (`DRAWDOWN_BREACH`); backend
-  re-checks daily as a backstop. Reaching the line (`≥`) fails the account.
-- **Daily drawdown** → **propdesk only**. The rules page no longer describes a
-  two-strike alert/breach sequence for daily drawdown; treat any daily-loss
-  line hit as potentially terminal, not just a warning.
+**Enforcement (corrects an earlier version of this file):**
+- **Cumulative drawdown** → enforced in real time (checked roughly every 10
+  seconds). Hitting `max_drawdown_pct` cancels all active orders, force-closes
+  the account with a reduce-only market close, freezes the account, and
+  disables its risk rule. This is the one truly hard, immediate line on
+  **both** Challenge and Fund.
+- **Daily drawdown is enforced DIFFERENTLY by phase — it is NOT symmetric,**
+  and is much softer than the cumulative line:
+  - **Challenge phase:** every daily-drawdown breach is **log-only** —
+    recorded and reported, but the account is **never frozen or force-closed
+    for it**, no matter how many times it happens.
+  - **Fund phase:** a rolling **7-day, two-strike** rule. The **1st** breach
+    in the window is a warning only (recorded, no freeze). The **2nd** breach
+    in the same rolling 7 days triggers the full action: cancel orders,
+    force-close, freeze, disable the rule.
+  - Trigger condition is **strict**: `daily_drawdown_pct < -max_daily_drawdown_pct`
+    (strictly less than — hitting exactly the line does not trigger).
+  - `last_daily_drawdown_pct` is a **live, continuously-updated value for the
+    CURRENT trading day** (UTC 08:00–08:00 window), computed in real time
+    against that day's opening equity, checked every ~10 seconds — it is
+    **not** a stale once-a-day snapshot (an earlier version of this file said
+    the opposite; that was wrong). Don't wait for a "daily close" to see it
+    move.
+  - On the fund-phase formula specifically: profit-share payouts may still be
+    partially counted as part of the day's drawdown — don't assume payout
+    outflows are cleanly excluded from this figure.
 - **Alert line is paired with the CUMULATIVE line, not the daily one** (confirmed:
   it's always ≤ `max_drawdown_pct`, and sits between the daily and cumulative
   lines on Standard). Where a track has no distinct soft-warning tier (Fast),
@@ -41,8 +61,8 @@ vintages**:
   live data is unavailable) reflects the *current* catalog, i.e. what a fresh
   purchase gets today.
 
-A drawdown breach is terminal — one hit and the account is done. There is no
-human waiver.
+A cumulative-drawdown breach is terminal — one hit and the account is done.
+There is no human waiver.
 
 > ℹ️ **Self-correction, in the interest of an accurate record.** An earlier
 > version of this file concluded the rules page had a typo (claiming Standard's
@@ -50,15 +70,14 @@ human waiver.
 > accounts that both showed 4% live. That conclusion was **wrong** — a third
 > Standard account (a fresh $25k purchase, tested 2026-07-15) came back
 > `max_daily_drawdown_pct = 5`, matching the rules page exactly. The correct
-> explanation: risk parameters are **published to propdesk once, at account
-> creation**, so they don't change retroactively when the catalog updates later
-> — the two 4% accounts were simply purchased before Standard's daily-loss line
-> moved from 4% to 5%. The rules page was right all along; the two older
-> accounts are grandfathered, not evidence of a page bug. **Issue #12 in
-> `A9Fund-API-issues.md` has been retracted/reclassified accordingly** — this is
-> expected platform behavior, not a defect. Starter's numbers are still
-> completely unverified live (no Starter test account obtained) — treat the
-> published-page values for Starter as unconfirmed until tested.
+> explanation: risk parameters are set **once, at account creation**, so they
+> don't change retroactively when the catalog updates later — the two 4%
+> accounts were simply purchased before Standard's daily-loss line moved from
+> 4% to 5%. The rules page was right all along; the two older accounts are
+> grandfathered, not evidence of a page bug. This is expected platform
+> behavior, not a defect. Starter's numbers are still completely unverified
+> live (no Starter test account obtained) — treat the published-page values
+> for Starter as unconfirmed until tested.
 
 ## Leverage caps
 
@@ -67,9 +86,22 @@ human waiver.
 | Challenge (Standard pre-pass) | **10X** |
 | Fund (Starter, Fast, passed Standard) | **5X** |
 
-Single scalar per stage — **no per-asset table in the backend** (front-end
-per-asset numbers are display copy). propdesk rejects an order above the cap at
-submission time. Trust the value accepted at order time.
+**Correction — an earlier version of this file wrongly claimed per-asset
+leverage was "display copy only".** There genuinely are three
+independently-enforced caps, combined by taking the MINIMUM:
+1. A9Fund's account-level `max_leverage`.
+2. The account's rule-profile `max_leverage` — the 10X/5X stage caps above.
+3. **The symbol's own risk-tier max leverage** (real, per-symbol): currently
+   **100X for BTC-USDT/ETH-USDT, 50X for every other listed symbol** — see the
+   full metadata table in `challenge-rules.md`.
+
+In practice, today's account-level caps (10X/5X) are always far below the
+symbol caps (50X/100X), so the account cap is the one that actually binds —
+that's why "trust the account-phase cap" has worked as guidance so far. But
+the symbol cap is real, not decorative, and could become the binding
+constraint if account-level caps are ever raised. An order above whichever of
+the three is lowest gets rejected at submission time — trust the value
+accepted at order time over any static claim (including this one).
 
 ## Rate limit
 
@@ -79,7 +111,7 @@ submission time. Trust the value accepted at order time.
 ## Inactivity (30 days)
 
 An account goes **inactive after 30 calendar days with no effective fill**. Only
-an executed trade (a real propdesk fill) resets the clock. These do **NOT** count:
+an executed trade (a real fill) resets the clock. These do **NOT** count:
 
 - Logging in / viewing the dashboard.
 - Reading market data (`markets.py board / kline / metadata`).
@@ -136,18 +168,18 @@ Two independent channels — different rules:
   conflict; event-contract data reconciled; account not under abnormal review
   (incl. AI-abuse review); at most **one successful payout per calendar day**;
   amount ≥ minimum and ≤ currently available profit.
-- **Final check:** the trading system re-validates the real deductible balance
-  at execution — a request can still be rejected here even after passing every
+- **Final check:** the system re-validates the real deductible balance at
+  execution — a request can still be rejected here even after passing every
   check above.
 
-> ⚠️ **Three-way conflict on the payout cap.** Whether there's a fixed
-> percent-of-account cap is stated inconsistently: the **rules page**
-> (2026-07-15) states no % cap (just "once/day" + "≤ available profit"); the
-> **FAQ** (`faq-content.ts`) states "5% of account size per cycle, first cycle
-> up to 3% soft cap"; the **backend code snapshot** has no cap coded at all
-> (also no coded KYC gate). Don't quote a user a specific payout ceiling beyond
-> "your available profit, checked at request time" until this is resolved —
-> see `challenge-rules.md` for the same caveat with full source citations.
+> ⚠️ **Conflict on the payout cap.** Whether there's a fixed
+> percent-of-account cap is stated inconsistently: the current published
+> rules page states no % cap (just "once/day" + "≤ available profit"); the
+> FAQ page states "5% of account size per cycle, first cycle up to 3% soft
+> cap" (not necessarily refreshed on the same cadence). Don't quote a user a
+> specific payout ceiling beyond "your available profit, checked at request
+> time" until this is resolved — see `challenge-rules.md` for the same
+> caveat.
 
 ### Wallet withdrawal (platform balance → chain)
 
@@ -161,29 +193,23 @@ Two independent channels — different rules:
 | Balance check | available ≥ amount |
 
 > Mainnet withdrawal is not yet live (network mode defaults to testnet; mainnet
-> token contracts are placeholders). KYC is **not** a coded precondition. Note
-> the two different "minimums": profit-share minimum profit ($50 Starter) vs
-> wallet-withdrawal minimum ($100 everyone).
+> token contracts are placeholders). Note the two different "minimums":
+> profit-share minimum profit ($50 Starter) vs wallet-withdrawal minimum
+> ($100 everyone).
 
 ## Forbidden behavior
 
-Published failure triggers (qa.a9fund.com/rules §08, cross-checked against the
-FAQ): hitting the max-loss limit, hitting the daily-loss limit, **trading an
-unsupported account or market**, **exceeding the account's max leverage**, and
+Published failure triggers (cross-checked against the FAQ): hitting the
+max-loss limit, hitting the daily-loss limit, **trading an unsupported
+account or market**, **exceeding the account's max leverage**, and
 **abnormal trading / fraud** (the platform may freeze the account for manual
 review).
 
-> ⚠️ **§08's "违规失败" (violation-failure) table currently looks corrupted in
-> the rules page's i18n source** (re-checked 2026-07-15): its rows are
-> byte-for-byte identical to the "暂时阻塞" (blocker) table right below it
-> (profitable-days unmet, consistency unmet, open positions, unsettled
-> predictions...) — those are blocker conditions, not the real breach causes,
-> and the column count doesn't even match the header. The list above (max-loss,
-> daily-loss, unsupported market, over-leverage, fraud) is preserved from an
-> earlier, uncorrupted read and cross-confirmed by the FAQ ("Max loss breach、
-> Daily loss breach、Unauthorized account / symbol、超过账户级杠杆限制、fraud"),
-> so it's kept as the more trustworthy list — but this should be reported to
-> the content/dev team as a likely authoring bug (see `A9Fund-API-issues.md`).
+> ⚠️ The published rules page's "violation-failure" table and its
+> "temporary-blocker" table currently show identical rows (re-checked
+> 2026-07-15) — likely a content authoring issue on that page, since the two
+> are meant to be different concepts. The list above is cross-confirmed
+> against the separate FAQ page instead and is the more trustworthy version.
 
 Additional prohibited behavior (standard prop-firm rules):
 

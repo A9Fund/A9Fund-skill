@@ -20,7 +20,11 @@ Activation: the account's event-contract profit only counts toward passing
 after 6 settled (WIN/LOSS) contracts. Any open/disputed contract blocks
 challenge pass and payout.
 
-NOTE: event-contract endpoints scope by `account_id` (NOT exchange_account_id).
+NOTE: GET endpoints (context, catalog, list, detail) scope by `account_id`.
+POST endpoints (quote, orders) scope by `exchange_account_id` -- they
+tolerate `account_id` as a legacy compat fallback, but new code should send
+`exchange_account_id`. Don't copy
+the GET convention onto POST bodies.
 The quote/order request bodies are assembled from documented fields; if the
 backend expects different names, use api.py with an explicit --json body.
 """
@@ -58,8 +62,9 @@ def cmd_catalog(_args, cfg):
 def cmd_quote(args, cfg):
     if float(args.premium) <= 0:
         die("--premium must be > 0.")
+    # POST bodies use exchange_account_id (GET query params use account_id).
     body = _merge_extra({
-        "account_id": cfg["exchange_account_id"],
+        "exchange_account_id": cfg["exchange_account_id"],
         "symbol": args.symbol,
         "direction": args.direction,
         "duration": args.duration,
@@ -72,7 +77,7 @@ def cmd_order(args, cfg):
     if float(args.premium) <= 0:
         die("--premium must be > 0.")
     body = {
-        "account_id": cfg["exchange_account_id"],
+        "exchange_account_id": cfg["exchange_account_id"],
         "symbol": args.symbol,
         "direction": args.direction,
         "duration": args.duration,

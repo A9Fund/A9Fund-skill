@@ -1,38 +1,33 @@
 # Challenge rules (A9Fund)
 
-> Sources, in the order this file trusts them: (1) live API responses
+> Sources, most authoritative first: (1) live API responses
 > (`/exchange-accounts` risk object, `/event-contracts/context`) — always wins
 > when available, and **this file was live-verified on 2026-07-15 across four
 > accounts** (two Standard, one Fast, spanning two purchase dates — see the
-> vintage-locking finding below); (2) the published rules page, sourced from
-> its i18n data (`frontend-v2/src/messages/{locale}.json` key `marketingRules`,
-> structured `navGroups`/`sections`, per
-> `docs/customer_service/knowledge_source.md`) — re-checked 2026-07-15;
-> (3) the backend code snapshot (`docs/rules-authoritative.md`,
-> `RULES_VERSION = "2026-06-21.v1"`). Sources 2 and 3 have drifted apart on
-> several numbers (catalog tiers/pricing, profitable-days count, payout cap) —
-> each is flagged below. **No Starter test account was available**, so
-> Starter's numbers are still page-sourced, not live-confirmed.
+> vintage-locking finding below); (2) A9Fund's published rules page,
+> re-checked 2026-07-15. Sources 1 and 2 have drifted apart on several numbers
+> (catalog tiers/pricing, profitable-days count, payout cap) — each is
+> flagged below. **No Starter test account was available**, so Starter's
+> numbers are still page-sourced, not live-confirmed.
 
-**Architecture premise (decides "who enforces what").** This backend is NOT on
-the trade write path — order placement / cancel / leverage go straight from the
-front-end to **propdesk** (the external matching + risk engine). All *real-time*
-risk (drawdown, leverage, position, event-contract odds/stake) is enforced by
-**propdesk**. The backend only (1) publishes rule parameters to propdesk, (2)
-records propdesk's terminal results, and (3) does a daily reconciliation pass.
+**Architecture premise (decides "who enforces what").** Order placement,
+cancellation, and leverage changes go straight to A9Fund's trading backend —
+this crate is not on the trade write path. All *real-time* risk (drawdown,
+leverage, position, event-contract odds/stake) is enforced there in real
+time. Rule parameters (drawdown lines, leverage cap, etc.) are set **once, at
+account creation**, and don't retroactively change when the published catalog
+updates later — the account keeps whatever it was created with.
 
-> **Confirmed consequence of (1) — risk parameters are vintage-locked.**
-> Because publishing happens once, at account creation, an account's actual
-> risk thresholds reflect the catalog *at the time it was purchased*, not
-> whatever the catalog says today. Live-verified 2026-07-15: two Standard
-> accounts purchased before some date both show `max_daily_drawdown_pct = 4`,
-> while a fresh Standard purchase that same day shows `= 5` (matching the
-> current published rules page exactly). **Always read an account's own live
-> risk fields — never assume a rules-page number applies to an account that
-> might predate it.** `risk_status.py` already does this correctly (always
-> prefers live data); this note is for anyone reading the docs by hand.
-So "the agent must trade within these numbers" — but propdesk is the thing that
-actually fails an account.
+> **Confirmed consequence — risk parameters are vintage-locked.** An
+> account's actual risk thresholds reflect the catalog *at the time it was
+> purchased*, not whatever the catalog says today. Live-verified 2026-07-15:
+> two Standard accounts purchased before some date both show
+> `max_daily_drawdown_pct = 4`, while a fresh Standard purchase that same day
+> shows `= 5` (matching the current published rules page exactly). **Always
+> read an account's own live risk fields — never assume a rules-page number
+> applies to an account that might predate it.** `risk_status.py` already
+> does this correctly (always prefers live data); this note is for anyone
+> reading the docs by hand.
 
 ## Account paths and tiers
 
@@ -125,59 +120,60 @@ failure, and no active temporary blocker.
   (Standard, measured against the **current phase's** total profit) / **35%**
   (Fast) of total profit. Unmet consistency is a temporary blocker, not a fail.
 - **Unsettled prediction-market profit** does not count toward the target.
-- **Pass (Standard):** the backend trusts propdesk's `final_challenge_pass=True`
-  — it does not compute Standard's multi-phase completion itself.
+- **Pass (Standard):** Standard's multi-phase completion is decided by the
+  backend risk system, not computed independently by A9Fund.
 - **Standard pass upgrade** is blocked while the account has any unsettled /
   disputed / unreconciled event contract — settle those first.
 - **Fail:** cumulative drawdown reaching the red line (`cumulative loss% ≥
-  max_drawdown_pct`, `≥` triggers). propdesk pushes `DRAWDOWN_BREACH` in real
-  time; the backend re-checks as a daily backstop. On fail: challenge fee is
-  **not** refunded, no new account is created.
+  max_drawdown_pct`, `≥` triggers) fails the account in real time, backstopped
+  by a daily re-check. On fail: challenge fee is **not** refunded, no new
+  account is created.
 
 ## Minimum profitable days
 
 Starter = **3**, Fast = **3**, Standard = **3 per phase** (published §03/§06).
 A profitable day is a UTC calendar day with positive **realized** PnL.
 
-> ⚠️ **Code vs published:** the backend snapshot (`rules-authoritative.md`) had
-> Starter at **2** days and counted Standard's days with scope `total` (3
-> cumulative, not per-phase). The rules page now says Starter needs **3** and
-> Standard is per-phase — plan for the stricter published numbers until the
-> backend confirms which is authoritative.
-
 ## Inactivity / termination
 
 - **Inactivity: 30 calendar days** with no effective fill → account set
-  `inactive` (`INACTIVITY_LIMIT_DAYS=30`); a warning window opens with <10 days
-  left. Only a real propdesk **fill** counts as activity.
-- **No challenge time limit.** The `max_duration_days` field is unset in the
-  catalog, so the expiry branch never fires.
-- **Real-time breach termination:** propdesk pushes `DRAWDOWN_BREACH` /
-  `DAILY_DRAWDOWN_BREACH` → account `suspended_breach`, order failed, snapshot
-  frozen.
+  `inactive`; a warning window opens with <10 days left. Only a real
+  executed **fill** counts as activity.
+- **No challenge time limit** currently in effect.
+- **Real-time breach termination:** a `DRAWDOWN_BREACH` /
+  `DAILY_DRAWDOWN_BREACH` event suspends the account, fails the order, and
+  freezes its snapshot.
 
 ## Leverage caps
 
-- Challenge stage: **10X**. Fund stage: **5X**. Single scalar per stage — there
-  is **no per-asset leverage table in the backend**.
+- Challenge stage: **10X**. Fund stage: **5X**. This is the account-level cap
+  set at account creation.
 
-> ⚠️ Front-end pages may show per-asset leverage (e.g. BTC 5X, SOL 3X). That is
-> **display copy only** — the backend publishes a single scalar
-> (challenge 10 / fund 5). If per-asset caps are enforced, it happens inside
-> propdesk. Trust the value propdesk accepts at order time.
+> ⚠️ **Correction:** an earlier version of this file claimed per-asset
+> leverage was "display copy only" with no real enforcement. That was
+> **wrong** — the platform genuinely enforces **three** leverage caps combined
+> by MINIMUM: the account-level stage cap above, an account-specific max
+> (separate from the stage default), and **the symbol's own risk-tier max
+> leverage** (currently 100X for BTC-USDT/ETH-USDT, 50X for every other
+> listed symbol — see the metadata table below). Today's account-level caps
+> (5X/10X) are always the lowest of the three, so they're the ones that
+> actually bind — but the symbol tier is a real, live-enforced number, not
+> marketing copy. Trust whatever the API accepts at order time.
 
-## Rules that live only in propdesk (not this backend)
+## Rules that are not enforced by A9Fund's account layer
 
-The following appear in requirement docs / UI but are **not** enforced by the
-A9Fund backend — if enforced at all, propdesk does it:
+The following appear in requirement docs / marketing UI but are **not**
+independently enforced by A9Fund's own account/business layer — if enforced
+at all, it happens in the real-time trading backend:
 
 - Max concurrent positions (docs: Starter 2 / Standard 4 / Fast 3).
 - Per-trade risk ≤ 1% / 0.75%; single-position size ≤ 35%/50%/40% of account;
   same-direction exposure ≤ 45%/60%/50%.
-- Per-asset leverage table.
+- Per-asset leverage table (see the correction above — this one IS real,
+  just enforced deeper in the stack than the account layer).
 
-Do not assume the backend will stop you on these — propdesk may reject the order
-at submission time instead.
+Do not assume A9Fund's own layer will stop you on the unconfirmed ones above —
+an order may still be rejected at submission time by the deeper system.
 
 ## Payout / profit share
 
@@ -215,24 +211,20 @@ rules §11, re-checked 2026-07-15):
   BSC**, coins **USDT / USDC**. Mainnet withdrawal is not yet live (testnet
   default; mainnet token contracts are placeholders).
 
-> ⚠️ **Three-way conflict on the payout cap — needs dev clarification.**
-> Whether there's a fixed percent-of-account payout cap is stated
-> inconsistently across sources:
-> - **Rules page (2026-07-15, current):** no % cap — only "once per day" +
->   "≤ currently available profit".
-> - **FAQ (`faq-content.ts`, same repo, not necessarily same freshness):**
->   "Max payout per cycle = 5% of account size, first cycle up to 3% soft cap."
-> - **Backend code snapshot (`rules-authoritative.md`):** no cap coded in the
->   funds path at all (only "≤ available profit"); KYC also not coded there.
->
-> Until this is resolved, do not promise a user a specific payout ceiling
-> beyond "your available profit, checked at request time" — quoting the 5%/3%
-> figure from the FAQ risks being wrong if the rules page is more current.
+> ⚠️ **Conflict on the payout cap — needs clarification.** Whether there's a
+> fixed percent-of-account payout cap is stated inconsistently across
+> sources: the current published rules page states no % cap — only "once per
+> day" + "≤ currently available profit"; the FAQ page states "Max payout per
+> cycle = 5% of account size, first cycle up to 3% soft cap" (not necessarily
+> refreshed on the same cadence as the rules page). Until this is resolved,
+> do not promise a user a specific payout ceiling beyond "your available
+> profit, checked at request time" — quoting the 5%/3% figure risks being
+> wrong if the rules page is more current.
 
 ## The three iron laws
 
 | Law | How it is enforced |
 |---|---|
-| 🚫 **Drawdown = out** | Cumulative drawdown: propdesk real-time + backend backstop. Daily drawdown: propdesk only — treat any hit as potentially terminal (the published page no longer describes a two-strike alert/breach sequence). |
+| 🚫 **Drawdown = out** | Cumulative drawdown is a hard, immediate line on BOTH phases — one hit force-closes and freezes the account. Daily drawdown is much softer and phase-dependent: challenge phase is log-only (never freezes on this alone); fund phase is a rolling 7-day two-strike (1st hit = warning, 2nd = force-close). See `references/risk-rules.md` for the full breakdown. |
 | 🚫 **No one-shot clear** | Event contracts need 6 settled before they count; profit target is cumulative, no single trade clears it. |
 | 🚫 **Must earn on enough days** | Profitable-days check at pass and at payout (Starter 3 / Standard 3 per phase / Fast 3). |

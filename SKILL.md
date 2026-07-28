@@ -1,15 +1,15 @@
 ---
 name: a9fund-trading
-description: Use when the user wants to trade on the A9Fund prop-trading platform. Covers credential binding, order placement / cancellation, attached and standalone conditional (TP/SL) orders, leverage, position / balance / order / trade queries, market data, event contracts (prediction market), and risk-status checks. Trigger on mentions of A9Fund, prop trading, Starter / Standard / Fast challenge, funded account, propdesk, event contract / prediction market, or any concrete action like "place order", "cancel order", "check positions", "check balance", "set leverage", "buy an UP contract".
+description: Use when the user wants to trade on the A9Fund prop-trading platform. Covers credential binding, order placement / cancellation, attached and standalone conditional (TP/SL) orders, leverage, position / balance / order / trade queries, market data, event contracts (prediction market), and risk-status checks. Trigger on mentions of A9Fund, prop trading, Starter / Standard / Fast challenge, funded account, event contract / prediction market, or any concrete action like "place order", "cancel order", "check positions", "check balance", "set leverage", "buy an UP contract".
 ---
 
 # A9Fund Trading Skill
 
-Autonomous prop-trading agent skill for the A9Fund platform. Wraps the propdesk
+Autonomous prop-trading agent skill for the A9Fund platform. Wraps the A9Fund
 HTTP API: credential binding, trading actions, event contracts, and a risk
-snapshot. A9Fund's backend is not on the trade write path — **propdesk enforces
-all real-time risk** (drawdown, leverage, stake caps); this skill trades within
-the published rules and reads state back.
+snapshot. Real-time risk (drawdown, leverage, stake caps) is enforced
+server-side; this skill trades within the published rules and reads state
+back.
 
 **Version:** see the `VERSION` file at the skill root
 (`cat skills/a9fund-skill/VERSION`), format `YYYY-MM-DD.N`.
@@ -180,19 +180,25 @@ audit trail.
 ## Critical rules (agent must internalize)
 
 Full detail in `references/risk-rules.md` and `references/challenge-rules.md`.
-Summary — **propdesk enforces these in real time; one breach is terminal**:
+Summary — **real-time risk is enforced server-side; a cumulative-loss breach
+is always terminal, daily-loss enforcement is phase-dependent**:
 
 - **Drawdown red lines (per track, live-verified 2026-07-15 across 4 accounts
   for Standard/Fast; Starter still unverified — always confirm against the
   account's OWN live `max_drawdown_pct`/`max_daily_drawdown_pct`, never a
   static table):** cumulative loss Starter **8%**, Standard **8%**, Fast
-  **6%**; daily loss Starter **4%**, Standard **5% for new accounts / 4% for
-  accounts purchased before the catalog updated**, Fast **4%**. Risk
+  **6%**. Reaching this line force-closes and freezes the account on BOTH
+  phases — no waiver. Daily loss Starter **4%**, Standard **5% for new
+  accounts / 4% for accounts purchased before the catalog updated**, Fast
+  **4%** — enforced differently by phase: **challenge phase is log-only,
+  never freezes on this alone**; **fund phase is a rolling 7-day two-strike**
+  (1st hit = warning, 2nd hit in the same 7 days = force-close). Risk
   parameters are locked in at account creation and don't change retroactively
   — see `references/risk-rules.md` for the full vintage-dependency finding.
-  Reaching the cumulative line fails the account.
-- **Leverage caps:** challenge phase **10X**, fund phase **5X**. Single scalar —
-  ignore any per-asset numbers shown in the UI; trust what propdesk accepts.
+- **Leverage caps:** challenge phase **10X**, fund phase **5X** — this is the
+  account-level cap that binds in practice. There is also a real per-symbol
+  cap (currently 100X BTC/ETH, 50X others) combined by taking the minimum of
+  all applicable caps; trust what the API accepts at order time.
 - **Rate limit:** max **5 orders/sec** per account (sleep ≥ 250 ms when batching).
 - **Profitable days to pass / payout:** Starter **3**, Fast **3**, Standard
   **3 per phase**. A profitable day = a UTC calendar day with positive

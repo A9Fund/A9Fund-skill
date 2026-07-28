@@ -1,11 +1,10 @@
 """Risk snapshot: /portfolio/balances + /positions + /exchange-accounts,
 compared against A9Fund per-track thresholds.
 
-Enforcement note (see references/risk-rules.md): A9Fund's backend is NOT on
-the trade write path. Real-time risk (cumulative + daily drawdown, leverage,
-position/stake caps) is enforced by propdesk. These thresholds are the
-published values the agent must trade within; propdesk is the authority that
-actually fails an account.
+Enforcement note (see references/risk-rules.md): real-time risk (cumulative +
+daily drawdown, leverage, position/stake caps) is enforced server-side, not by
+this script. These thresholds are the published values the agent must trade
+within; the server is the authority that actually fails an account.
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from _common import get_active_exchange, http_request, load_config, print_json, 
 # consistency_pct = single-day profit-share cap (enforced at pass/payout, not
 # trade time). profit_target_pct is the pass target.
 #
-# IMPORTANT: risk parameters are published to propdesk ONCE, at account
+# IMPORTANT: risk parameters are set on an account ONCE, at account
 # creation, and do NOT change retroactively when this catalog updates later.
 # So an existing account's live values can legitimately differ from the
 # numbers below (e.g. two Standard accounts purchased before 2026-07-15 both
@@ -47,12 +46,14 @@ _FAST = {
 THRESHOLDS_BY_TRACK = {"starter": _STARTER, "standard": _STANDARD, "fast": _FAST}
 
 RULE_REMINDERS = [
-    "Drawdown is death: cumulative-loss red line (Starter 8%, Standard 8%, Fast 6%) "
-    "and daily-loss line (Starter 4%, Standard 5% for new accounts/4% for older ones, Fast 4%) "
-    "are enforced by propdesk in real time -- one breach fails the account. "
-    "ALWAYS trust this account's own live max_drawdown_pct/max_daily_drawdown_pct over any table, "
-    "since risk parameters are locked in at account creation and don't retroactively update.",
-    "Leverage caps: challenge phase 10X, fund phase 5X (propdesk enforces at order time).",
+    "Cumulative-loss red line (Starter 8%, Standard 8%, Fast 6%) is the one truly hard line: "
+    "one hit force-closes and freezes the account, on BOTH challenge and fund phase. "
+    "ALWAYS trust this account's own live max_drawdown_pct over any table (params are locked at account creation).",
+    "Daily-loss line (Starter 4%, Standard 5% for new accounts/4% for older ones, Fast 4%) is enforced "
+    "DIFFERENTLY by phase: challenge phase = log-only, NEVER freezes the account no matter how many hits; "
+    "fund phase = rolling 7-day two-strike (1st hit = warning, 2nd hit in the same 7 days = force-close+freeze). "
+    "last_daily_drawdown_pct is LIVE/continuous for the current UTC day, not a stale daily snapshot.",
+    "Leverage caps: challenge phase 10X, fund phase 5X (enforced server-side at order time).",
     "Rate limit: max 5 orders per second per account.",
     "Profitable days (UTC day with positive REALIZED pnl): Starter 3 / Fast 3 / Standard 3 per phase. "
     "Only realized profit counts toward the pass target -- floating PnL does not; "
@@ -148,7 +149,7 @@ def main() -> None:
         if initial_balance and wallet_balance is not None else None
     )
 
-    # Prefer propdesk's authoritative figures from the account risk sub-object.
+    # Prefer the account's own authoritative figures from its risk sub-object.
     # The account reports its OWN red lines (max_drawdown_pct etc.), which are
     # the ground truth — override the per-track table with them when present.
     risk = _find_account_risk(cfg)
@@ -177,9 +178,12 @@ def main() -> None:
     if last_daily_dd is not None:
         daily_block["last_daily_drawdown_pct"] = round(last_daily_dd, 4)
         daily_block["status"] = _status(abs(last_daily_dd), daily_limit)
-        daily_block["note"] = "From /exchange-accounts risk (daily worker snapshot); not intraday real-time."
+        daily_block["note"] = ("Live value for the current UTC trading day (08:00-08:00), updated ~every "
+                               "10s -- NOT a stale daily snapshot. Enforcement is phase-dependent: challenge "
+                               "phase never freezes on this alone; fund phase force-closes on the 2nd breach "
+                               "within a rolling 7 days (1st is a warning only).")
     else:
-        daily_block["note"] = ("Enforced by propdesk in real time; not derivable client-side here. "
+        daily_block["note"] = ("Enforced server-side in real time; not derivable client-side here. "
                                "Watch equity vs previous-day equity.")
 
     output = {

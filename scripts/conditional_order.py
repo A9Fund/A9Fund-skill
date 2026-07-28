@@ -40,10 +40,9 @@ leftover LIMIT BUY order after the position was later sold via a correctly-side
 manual close).
 
 `set-position-tpsl` mirrors EXACTLY what the A9Fund web terminal's own
-"Position TP/SL" dialog does (reverse-engineered from
-`frontend-v2/src/app/app/terminal/position-tpsl-modal.tsx` -- there is no
-separate "attach to position" API; the web UI uses this same
-`/conditional-orders` endpoint, just with hardcoded-safe parameters):
+"Position TP/SL" dialog does under the hood -- there is no separate "attach to
+position" API; the web UI uses this same `/conditional-orders` endpoint, just
+with hardcoded-safe parameters:
 
 1. Reads the current position for `--symbol` -> derives the closing side
    (SELL for a LONG, BUY for a SHORT) and the full position quantity.
@@ -80,7 +79,7 @@ def cmd_create(args, cfg):
         "size": args.size,
         "trigger_price": args.trigger_price,
         "trigger_price_type": args.trigger_price_type,
-        "trigger_direction": args.trigger_direction,
+        "trigger_direction": args.trigger_direction or "",  # optional; server infers from price vs market if omitted
         "trigger_order_type": args.trigger_order_type,
         "order_price": args.order_price,
         "reduce_only": args.reduce_only,
@@ -233,8 +232,10 @@ def main() -> None:
     sc.add_argument("--size", required=True)
     sc.add_argument("--trigger-price", required=True)
     sc.add_argument("--trigger-price-type", default="MARKET", choices=["INDEX", "MARKET", "MARK"])
-    sc.add_argument("--trigger-direction", required=True, choices=["GTE", "LTE"],
-                    help="GTE = fire when price rises to/above trigger; LTE = falls to/below")
+    sc.add_argument("--trigger-direction", default=None, choices=["GTE", "LTE"],
+                    help="GTE = fire when price rises to/above trigger; LTE = falls to/below. "
+                         "Optional -- the server infers it from trigger_price vs the current market "
+                         "price if omitted, and rejects creation if the condition is already met.")
     sc.add_argument("--trigger-order-type", default="MARKET", choices=["LIMIT", "MARKET"])
     sc.add_argument("--order-price", default="", help="Required for LIMIT trigger_order_type")
     sc.add_argument("--reduce-only", action="store_true")

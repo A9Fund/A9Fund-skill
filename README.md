@@ -56,17 +56,22 @@ Same `bind` command switches accounts later.
 
 ## Key rules for the agent
 
-A9Fund's backend is **not** on the trade write path — **propdesk enforces all
-real-time risk**. One breach is terminal. Per track:
+Real-time risk (drawdown, leverage, position/stake caps) is enforced
+server-side. Per track:
 
 - **Cumulative loss:** Starter 8%, Standard 8%, Fast 6% (Standard/Fast
   live-verified 2026-07-15 across 4 accounts; always confirm against the
   account's OWN live `max_drawdown_pct` — see `references/risk-rules.md`).
+  Reaching this line force-closes and freezes the account on both phases —
+  no waiver.
 - **Daily loss:** Starter 4%, Standard 5% for accounts purchased after the
   catalog updated / 4% for older ones (risk params are locked in at purchase,
-  don't change retroactively), Fast 4%.
-- **Leverage:** challenge 10X / fund 5X (single scalar; UI per-asset numbers are
-  display only).
+  don't change retroactively), Fast 4%. Enforced differently by phase:
+  challenge phase is log-only (never freezes on this alone); fund phase is a
+  rolling 7-day two-strike (1st hit = warning, 2nd = force-close).
+- **Leverage:** challenge 10X / fund 5X account-level cap (the one that binds
+  in practice); a real per-symbol cap also exists (100X BTC/ETH, 50X others),
+  combined by taking the minimum of all applicable caps.
 - **Rate limit:** 5 orders/sec per account.
 - **Profitable days to pass:** Starter 3, Standard 3 per phase, Fast 3.
 - **Event contracts:** count toward passing only after 6 settled; any
@@ -86,17 +91,15 @@ Full detail in [references/risk-rules.md](references/risk-rules.md) and
 - **Sandboxable.** Deny direct reads of `~/.a9fund/accounts/**` in
   `.claude/settings.json` to keep the agent from ever ingesting the key bytes.
 
-## Provenance & caveats
+## Notes & caveats
 
-Ported from the propdesk reference skill (`aixfunded_skill`) and adapted to the
-A9Fund API surface (account detail page `/app/agent-api`) and the authoritative
-rules in `A9Fund-backend-next/docs/rules-authoritative.md`. A9Fund-specific
-changes: Starter/Standard/Fast tracks and their thresholds; optional (not
-required) reasoning; the dedicated `/conditional-orders` resource; and the
-Event Contracts feature.
+Built around the A9Fund API surface (account detail page `/app/agent-api`)
+and A9Fund's published rules: Starter/Standard/Fast tracks and their
+thresholds; optional (not required) reasoning on orders; the dedicated
+`/conditional-orders` resource; and the Event Contracts feature.
 
-**Verified end-to-end against the QA API** (`qa-api.a9fund.com`) — every script
-and endpoint was live-tested, which surfaced and fixed several real issues:
+**Verified end-to-end against a test API environment** — every script and
+endpoint was live-tested, which surfaced and fixed several real issues:
 
 - The gateway is behind **Cloudflare Browser Integrity Check**, which 403-blocked
   the default urllib User-Agent (`error 1010`). Fixed on the Cloudflare side (a

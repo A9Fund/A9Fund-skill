@@ -54,7 +54,7 @@
 ## Balance fields (/portfolio/balances)
 
 Published example is bare: `{"total": "...", "available": "...",
-"unrealized_pnl": "..."}`. The fuller propdesk shape (when enveloped under
+"unrealized_pnl": "..."}`. The fuller shape (when enveloped under
 `balances[]`) includes:
 
 | Field | Notes |
@@ -93,7 +93,7 @@ Published example is bare: `{"total": "...", "available": "...",
 | current_drawdown_pct | Pullback from the historical peak — display only, NOT comparable to the red line |
 | last_daily_drawdown_pct | Previous-day drawdown (daily worker snapshot), ≤ 0; `"0"` = flat/profit/first day |
 | current_equity / baseline_equity / peak_equity / trough_equity | Equity figures |
-| short_hold_count_7d | Legacy counter from the shared propdesk backend — **no A9Fund rule is attached to it**; ignore (do not infer a minimum-holding-time rule from its presence) |
+| short_hold_count_7d | Legacy counter — **no A9Fund rule is attached to it**; ignore (do not infer a minimum-holding-time rule from its presence) |
 
 ## Attached TP/SL field shapes (differ by endpoint)
 

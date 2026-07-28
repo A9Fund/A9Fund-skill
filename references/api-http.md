@@ -148,7 +148,7 @@ curl -X POST $BASE/setLeverage \
   -d '{"exchange_account_id":"'$ACCT'","symbol":"BTC-USDT","leverage":5,"margin_mode":"CROSS"}'
 ```
 
-> Caps: challenge phase 10X / fund phase 5X. propdesk rejects an over-cap order.
+> Caps: challenge phase 10X / fund phase 5X. The API rejects an over-cap order.
 
 ### Conditional (trigger) orders — dedicated resource
 

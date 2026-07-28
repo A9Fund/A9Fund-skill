@@ -5,10 +5,14 @@ FUND_MAX_LEVERAGE=5):
   challenge phase (Standard pre-pass): 10X
   fund phase (Starter, Fast, passed Standard): 5X
 
-The cap is enforced for real by propdesk at order time (this backend is not on
-the trade path), so this client check is a courtesy guard. When the bound
-phase is unknown it defaults to the looser challenge cap and lets propdesk be
-the authority. Trust the value propdesk accepts at order time.
+The cap is enforced for real server-side at order time, so this client check
+is a courtesy guard, not the actual gate. A per-symbol cap can also apply
+(currently 100X for BTC-USDT/ETH-USDT, 50X for other listed symbols) — the
+effective limit is whichever of the account-phase cap and the symbol cap is
+lower, and today the account-phase cap (10X/5X) is always the binding one.
+When the bound phase is unknown this defaults to the looser challenge cap and
+lets the server be the final authority. Trust the value accepted at order
+time.
 """
 from __future__ import annotations
 
@@ -38,7 +42,7 @@ def main() -> None:
 
     if args.leverage > max_lev:
         die(f"Leverage {args.leverage} exceeds the {stage}-phase cap of {max_lev}X "
-            f"(current phase={phase or 'unknown'}). propdesk enforces this at order time.")
+            f"(current phase={phase or 'unknown'}). This is enforced server-side at order time.")
 
     body = {
         "exchange_account_id": cfg["exchange_account_id"],

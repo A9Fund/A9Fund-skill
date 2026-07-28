@@ -19,8 +19,7 @@ This split means:
 
 Response-envelope tolerance
 ---------------------------
-A9Fund's REST layer sits in front of the same propdesk backend, but the
-published examples show BARE bodies (e.g. `{"order_id": "...", "status":
+The published examples show BARE bodies (e.g. `{"order_id": "...", "status":
 "PENDING"}`) and `{"detail": "..."}` on errors, while the coded error table
 uses business codes 10001-10008. So `http_request` accepts BOTH shapes:
 
@@ -235,7 +234,7 @@ def http_request(
     timeout: int = 30,
     return_headers: bool = False,
 ) -> Any:
-    """Send an HTTP request to the A9Fund/propdesk API and return parsed JSON.
+    """Send an HTTP request to the A9Fund API and return parsed JSON.
 
     - method: GET / POST / PUT / DELETE
     - path: API path starting with `/`, e.g. `/createOrder`

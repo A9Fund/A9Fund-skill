@@ -1,7 +1,11 @@
 """Cancel regular orders.
 
-  --order-id <id> --symbol <sym>   POST /cancelOrder  (single)
-  --all           --symbol <sym>   POST /cancelOrders (batch by symbol)
+  --order-id <id> [--symbol <sym>]   POST /cancelOrder  (single)
+  --all [--symbol <sym>]             POST /cancelOrders (batch)
+
+`--symbol` is optional in both cases. For `--all`, omitting it cancels EVERY
+active order on the account, across all symbols -- a broad, hard-to-undo
+action; pass `--symbol` unless you specifically mean "cancel everything".
 
 This handles REGULAR (LIMIT/MARKET) orders. To cancel a standalone
 conditional order (STOP / TAKE_PROFIT trigger order created via
@@ -23,8 +27,10 @@ def main() -> None:
                         "create response or `query.py open-orders` — NOT the venue's "
                         "exchange_order_id, which is usually empty on the paper venue. "
                         "The value is sent in the request's exchange_order_id field.")
-    g.add_argument("--all", action="store_true", help="Cancel all orders for the given symbol")
-    p.add_argument("--symbol", required=True)
+    g.add_argument("--all", action="store_true",
+                   help="Cancel all orders for --symbol, or account-wide if --symbol is omitted.")
+    p.add_argument("--symbol", default=None,
+                   help="Optional. For --all, omitting this cancels EVERY active order on the account.")
     p.add_argument("--trace-id", default="")
     p.add_argument("--account-id", default=None,
                    help="Assert the bound account before cancelling (guards state drift; also A9FUND_ACCOUNT_ID).")
@@ -33,15 +39,18 @@ def main() -> None:
     cfg = load_config(expected_account_id=args.account_id)
 
     if args.all:
-        body = {"exchange_account_id": cfg["exchange_account_id"], "symbol": args.symbol}
+        body = {"exchange_account_id": cfg["exchange_account_id"]}
+        if args.symbol:
+            body["symbol"] = args.symbol
         resp = http_request("POST", "/cancelOrders", json_body=body, cfg=cfg)
     else:
         body = {
             "exchange_account_id": cfg["exchange_account_id"],
             "exchange_order_id": args.order_id,
             "trace_id": args.trace_id or args.order_id,
-            "symbol": args.symbol,
         }
+        if args.symbol:
+            body["symbol"] = args.symbol
         resp = http_request("POST", "/cancelOrder", json_body=body, cfg=cfg)
 
     print_json(unwrap(resp))

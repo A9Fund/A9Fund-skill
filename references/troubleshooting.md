@@ -6,71 +6,99 @@
 take-profit/stop-loss; the skill created a conditional order for it; after the
 position was later sold, a leftover LIMIT BUY order was still sitting open.
 
-**Root cause:** `place_order.py --tp-price/--sl-price` only attaches TP/SL to a
-**new** entry order at creation time. It has no way to retroactively attach to
-a position that's already open. The only mechanism for that is a standalone
-order via `/conditional-orders` (`conditional_order.py create`) — but that
-subcommand takes `--side`, `--size`, and `--reduce-only` as free parameters. If
-an agent free-hands it to "protect" an existing position without getting all
-three exactly right (side = the CLOSING side, opposite the position; size =
-the full position quantity; `reduce_only = true`), the resulting order can end
-up on the **wrong side** or **not reduce-only**. If it triggers (or the
-position is separately closed by other means) while that order is still
-resting, it can execute as a plain directional order rather than a close — a
-BUY-side conditional with a LIMIT trigger type, for example, surfaces exactly
-as "a leftover LIMIT BUY order" once the market has moved away from its price.
+**Root cause:** `place_order.py --tp-price/--sl-price` only attaches TP/SL to
+a **new** entry order at creation time. For an already-open position, the
+only mechanism is a standalone conditional order (`/conditional-orders`). The
+backend only force-sets `reduce_only=true` when `trigger_order_type` is
+`STOP_*` or `TAKE_PROFIT_*` — **a plain `LIMIT`/`MARKET` `trigger_order_type`
+is always treated as a standard conditional ENTRY order** (`reduce_only`
+stays whatever the caller passed, `false` by default) and is never
+auto-corrected. If an agent free-hands `conditional_order.py create` to
+"protect" a position using `--trigger-order-type LIMIT` (e.g. meaning "exit
+at this limit price") instead of the correct `TAKE_PROFIT_MARKET` /
+`STOP_MARKET` classification, the resulting order is never recognized as
+reduce-only TP/SL by the backend — it is a genuine entry-type LIMIT order
+that can sit in the book on the wrong side indefinitely, exactly matching the
+reported symptom.
 
-**Investigation:** the A9Fund web terminal has a dedicated "Position TP/SL"
-dialog (`frontend-v2/src/app/app/terminal/position-tpsl-modal.tsx` +
-`terminal-tpsl.ts`, `src/lib/api-trading.ts`). Reverse-engineering its actual
-network calls showed **there is no separate "attach to position" API** — it
-calls the exact same `/conditional-orders` endpoint this skill already uses,
-just with hardcoded-safe parameters:
-- `side`: always the position's closing side (SELL for LONG, BUY for SHORT).
-- `size`: always the position's full quantity.
-- `trigger_order_type`: always `take_profit_market` / `stop_market` (never
-  `limit`).
-- `reduce_only`: always `true`.
-- Before creating new legs, it **cancels every existing TP/SL conditional
-  order for that position first** — so re-opening the dialog and resubmitting
-  never stacks duplicate legs.
-- The dialog also **pre-fills both TP and SL fields from any existing legs**,
-  so "I only want to change the stop-loss" naturally resubmits the unchanged
-  take-profit value too, rather than dropping it.
+**Investigation:** the A9Fund web trading terminal has a dedicated "Position
+TP/SL" dialog. Watching its actual network requests confirmed **there is no
+separate "attach to position" API** — it hits the exact same
+`/conditional-orders` endpoint this skill already wraps, just with
+hardcoded-safe parameters: `side` = the position's closing side, `size` =
+full position quantity, `trigger_order_type` always
+`TAKE_PROFIT_MARKET`/`STOP_MARKET` (never `LIMIT`), `reduce_only` always
+`true`, and existing legs for that position always cancelled before creating
+new ones. A9Fund's own API confirms there is no merged position-TP/SL
+endpoint: setting both legs on an existing position means two separate
+`POST /conditional-orders` calls — exactly what the web dialog (and now this
+skill) does.
 
-There is no dedicated field like `is_position_tpsl` in what A9Fund's own
-`/app/agent-api` docs page publishes (only `is_open_tpsl_order` for
-attach-on-entry is documented there) — despite that name existing in the
-internal `CreateOrderBody` type (`src/lib/api-trading.ts`), it isn't what the
-position-TP/SL feature actually uses in practice, per the modal's real
-network calls. Don't be misled by that field name into thinking there's a
-simpler mechanism than there is.
+Also confirmed: sending `is_position_tpsl: true` on `createOrder` is
+**explicitly rejected by the API** (not currently supported). Don't be misled
+by that field name into thinking there's a simpler "attach to position"
+mechanism than there is.
 
 **Fix:** added `conditional_order.py set-position-tpsl --symbol <sym>
-[--tp-price X] [--sl-price Y]`, which reproduces the web dialog's exact
-behavior: reads the current position, derives side/size automatically, cancels
-prior legs for that symbol, and creates fresh TAKE_PROFIT_MARKET /
-STOP_MARKET / reduce_only=true legs. **This is now the only sanctioned way to
-add or change TP/SL on an already-open position** — see SKILL.md's TP/SL
-mental model.
+[--tp-price X] [--sl-price Y]`, reproducing the web dialog's exact behavior.
+**This is now the only sanctioned way to add or change TP/SL on an
+already-open position** — see SKILL.md's TP/SL mental model.
 
-**A second bug found while building the fix:** an initial version of
-`set-position-tpsl` cancelled *all* of the position's existing TP/SL legs
-before creating new ones (matching the web dialog's raw behavior), but did
-**not** pre-fill the untouched side the way the dialog's UI does — so calling
-it with only `--sl-price` (intending to leave TP alone) silently dropped the
-existing TP leg with no new one created. Fixed: the subcommand now reads
-existing legs *before* cancelling, and re-creates any leg the caller didn't
-explicitly touch (or explicitly clear with `--clear-tp` / `--clear-sl`) with
-its prior trigger price unchanged. Live-verified on a real BTC-USDT LONG
-position (fast-25k fund account, 2026-07-16): create TP+SL → update SL only
-(confirmed TP preserved at its original price) → `--clear-tp` (confirmed TP
-actually removed, not recreated).
+**A second bug found while building the fix:** cancelling *all* of a
+position's existing TP/SL legs before creating new ones (matching the web
+dialog's raw behavior) but only recreating the explicitly-passed price
+silently dropped the OTHER leg when only one of `--tp-price`/`--sl-price` was
+given. Fixed: the subcommand reads existing legs *before* cancelling and
+re-creates any leg the caller didn't touch (or explicitly clears with
+`--clear-tp`/`--clear-sl`). Live-verified: create TP+SL → update SL only (TP
+preserved) → `--clear-tp` (TP actually removed).
 
-**Takeaway for anyone extending this skill:** whenever a workflow needs to
-target "the position", not "an order", check whether the A9Fund web app has an
-equivalent dedicated UI first, and read its actual network calls rather than
-assuming a field name in a type definition is the real mechanism — this
-platform's docs page has repeatedly proven incomplete (see
-`A9Fund-API-issues.md`), but the web app's own runtime behavior is ground
-truth.
+## Standalone TP/SL legs are not OCO-paired with each other
+
+If you set a standalone TP and a standalone SL as two separate conditional
+orders (which is the *only* way to set TP/SL on an already-open position —
+see above), and one of them **triggers** (fires because the price hit it,
+closing the position), **the other one is not automatically cancelled**. It
+keeps resting and could later misfire — e.g. against a brand new, unrelated
+position opened on the same symbol afterward.
+
+(This is different from *attached* TP/SL set at entry time via
+`place_order.py --tp-price/--sl-price`, which **is** a true OCO pair — only
+the standalone/`set-position-tpsl` path lacks this.)
+
+**Mitigation added:** `close_position.py` now cancels any remaining active
+reduce_only conditional orders on a symbol (matching the position's closing
+side) immediately after closing it via a direct MARKET order — a safety net
+for the case where a stale sibling leg was left resting for any reason. Pass
+`--keep-tpsl` to skip this.
+
+**What live testing actually showed (be precise about this, don't overclaim):**
+in a real test — set TP+SL via `set-position-tpsl`, then close the position
+with `close_position.py`'s own MARKET order (not by letting either leg
+trigger) — the sibling legs were **already gone** by the time the cleanup
+step queried for them (`cancelled_stale_tpsl: []`, and a follow-up
+`conditional_order.py list` showed zero active orders). This suggests the
+backend has its own housekeeping that invalidates reduce-only conditional
+orders once the position they'd reduce goes flat, at least for a **direct
+external close** — separately from the specific no-OCO gap described above
+for the **one-leg-triggers** case, which this particular test didn't
+reproduce. This skill's cleanup step in `close_position.py` was NOT observed
+to be load-bearing in this test; keep it as a defensive, no-op-if-unnecessary
+safety net.
+
+## Client-side retry safety: always reuse `client_order_id`
+
+Attached TP/SL is created *after* the entry order is already accepted, so if
+that TP/SL creation step fails, **the entry order may already exist** even
+though the overall call returned an error. `(exchange_account_id,
+client_order_id)` is the idempotency key — a retry with the *same*
+`client_order_id` safely returns the original order instead of creating a
+duplicate.
+
+**Implication for the agent:** if a `place_order.py` call errors out (network
+timeout, an attach-TP/SL failure after the entry was accepted, etc.), do
+**not** just call it again — that generates a **new** auto client_order_id
+(`agent-{ms}-{uuid}`) and risks placing a genuine duplicate entry. Instead,
+either (a) check `query.py open-orders` / `history-orders` for whether the
+entry already exists before retrying, or (b) retry with the exact same
+`--client-order-id` explicitly passed the first time.
