@@ -56,7 +56,8 @@ Legacy (key passes through the agent): `python3 config.py bootstrap --api-key af
 | Validate key | `python3 auth_check.py` |
 | Place MARKET/LIMIT | `python3 place_order.py --symbol BTC-USDT --side BUY --order-type LIMIT --size 0.1 --price 60000` |
 | Open with attached TP/SL | `python3 place_order.py --symbol BTC-USDT --side BUY --order-type MARKET --size 0.001 --tp-price 80000 --sl-price 75000` |
-| Standalone conditional | `python3 conditional_order.py create --symbol ETH-USDT --side BUY --size 1 --trigger-price 1582.77 --trigger-direction GTE --trigger-order-type LIMIT --order-price 1583` |
+| Standalone conditional (entry-side, e.g. stop-buy) | `python3 conditional_order.py create --symbol ETH-USDT --side BUY --size 1 --trigger-price 1582.77 --trigger-direction GTE --trigger-order-type LIMIT --order-price 1583` |
+| **Set/change TP-SL on an OPEN position** | `python3 conditional_order.py set-position-tpsl --symbol BTC-USDT --tp-price 90000 --sl-price 60000` |
 | List conditional orders | `python3 conditional_order.py list` |
 | Cancel conditional order | `python3 conditional_order.py cancel --id <id>` |
 | Close position | `python3 close_position.py --symbol BTC-USDT` / `--all` |
@@ -107,6 +108,15 @@ A mismatch aborts with a clear message instead of trading the wrong account.
 - `conditional_order.py list` = **active** standalone conditional orders
   (`/conditional-orders`, UNTRIGGERED). `query.py condition-orders` = **mixed**
   view incl. history (`/conditionOrders`, TRIGGERED/CANCELED + TP/SL legs).
+
+## Adding TP/SL to an already-open position
+
+Use `conditional_order.py set-position-tpsl`, not a hand-rolled
+`conditional_order.py create` — see `../references/troubleshooting.md` for a
+real incident where free-handing `create` (wrong side / missing
+`--reduce-only`) left a stray order in the book. `set-position-tpsl` reads the
+position, gets side/size/`reduce_only` right automatically, and won't silently
+drop a leg you didn't mean to touch.
 
 ## Failure fallback
 

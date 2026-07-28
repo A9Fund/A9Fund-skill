@@ -96,11 +96,14 @@ python3 scripts/place_order.py --symbol BTC-USDT --side BUY --order-type LIMIT -
 python3 scripts/place_order.py --symbol BTC-USDT --side BUY --order-type MARKET --size 0.001 \
   --tp-price 80000 --sl-price 75000
 
-# Standalone conditional (trigger) order — dedicated resource
+# Standalone conditional (trigger) order — dedicated resource (entry-side, e.g. a stop-buy)
 python3 scripts/conditional_order.py create --symbol ETH-USDT --side BUY --size 1 \
   --trigger-price 1582.77 --trigger-direction GTE --trigger-order-type LIMIT --order-price 1583
 python3 scripts/conditional_order.py list
 python3 scripts/conditional_order.py cancel --id <id>
+
+# Add/change TP-SL on a position that's ALREADY OPEN -- use this, not a hand-rolled `create`
+python3 scripts/conditional_order.py set-position-tpsl --symbol BTC-USDT --tp-price 90000 --sl-price 60000
 
 # Close position (market reduce-only)
 python3 scripts/close_position.py --symbol BTC-USDT
@@ -137,22 +140,35 @@ python3 scripts/risk_status.py
 
 ## TP/SL mental model
 
-Two ways to set a stop-loss / take-profit:
+Two ways to set a stop-loss / take-profit — **which one to use depends on
+whether the position exists yet**:
 
-1. **Attach on entry** (`place_order.py --tp-price X --sl-price Y`) — one atomic
-   call. The script sets `is_set_open_tp` / `is_set_open_sl` plus the flat
-   `tp_trigger_price` / `sl_trigger_price` fields that `createOrder` expects; the
-   legs form an OCO pair (one triggers → the other auto-cancels). While the entry
-   LIMIT is resting, the legs are embedded in the entry row under `take_profit[]`
-   / `stop_loss[]` (see `query.py open-orders`). Once filled, they move to
+1. **Attach on entry** (`place_order.py --tp-price X --sl-price Y`) — use this
+   when OPENING a new position. One atomic call; the script sets
+   `is_set_open_tp` / `is_set_open_sl` plus the flat `tp_trigger_price` /
+   `sl_trigger_price` fields that `createOrder` expects; the legs form an OCO
+   pair (one triggers → the other auto-cancels). While the entry LIMIT is
+   resting, the legs are embedded in the entry row under `take_profit[]` /
+   `stop_loss[]` (see `query.py open-orders`). Once filled, they move to
    `query.py condition-orders`.
-2. **Standalone conditional order** (`conditional_order.py create`) — a separate
-   trigger order in the `/conditional-orders` resource; cancel it with
-   `conditional_order.py cancel --id <id>`.
+2. **`conditional_order.py set-position-tpsl`** — use this to add or change
+   TP/SL on a position that's **already open** (the entry already happened,
+   possibly several tool calls / a prior session ago). This is the only
+   correct path for that case — there is no "attach to existing position" API
+   field; it mirrors exactly what the A9Fund web terminal's own "Position
+   TP/SL" dialog does under the hood (same `/conditional-orders` endpoint),
+   automatically getting side, size, `reduce_only`, and replace-not-stack
+   right. See `references/troubleshooting.md` for the bug this replaced.
 
-Prefer #1 when opening; use #2 to add / adjust after entry. The backend
-cascade-cancels attached legs when you cancel an unfilled LIMIT entry — no extra
-cleanup needed.
+**Never hand-rolling `conditional_order.py create` to "add TP/SL to a position
+that's already open."** That subcommand is for standalone entry-side trigger
+orders (e.g. a stop-buy), not position protection — getting `--side` (must be
+the CLOSING side, opposite the position) or `--reduce-only` wrong there can
+leave a stray, wrong-side order sitting in the book after the position is
+gone. Use `set-position-tpsl` for anything protecting an existing position.
+
+The backend cascade-cancels attached (case 1) legs when you cancel an unfilled
+LIMIT entry — no extra cleanup needed there.
 
 ## Reasoning is optional
 
@@ -228,4 +244,5 @@ If a `scripts/xxx.py` invocation fails:
 - `references/data-types.md` — field definitions, order statuses, risk fields.
 - `references/challenge-rules.md` — account paths, tiers, pass/fail, payout.
 - `references/risk-rules.md` — drawdown lines, forbidden behavior, agent guidance.
+- `references/troubleshooting.md` — real incidents found in production and their fixes.
 - `scripts/README.md` — full script command reference.
